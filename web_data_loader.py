@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Union
-from langchain_community.document_loaders import WebBaseLoader, DedocFileLoader
+from langchain_community.document_loaders import WebBaseLoader, PythonLoader, PythonLoader
 from langchain.docstore.document import Document
 import asyncio
 
@@ -51,20 +51,20 @@ class WebLoader(LoaderProvider):
         return self.docs
 
 
-class DedocLoader(LoaderProvider):
+class PythonFileLoader(LoaderProvider):
     """
     Concrete implementation of LoaderProvider for file-based loaders.
     """
 
     def __init__(self):
         super().__init__()
-        self._loader: Union[DedocFileLoader, None] = None  # Define the loader as None initially
+        self._loader: Union[PythonFileLoader, None] = None  # Define the loader as None initially
 
     def _create_loader(self, file_path: str, *args, **kwargs) -> None:
         """
-        Private method to create a DedocFileLoader instance with the specified file path.
+        Private method to create a PythonFileLoader instance with the specified file path.
         """
-        self._loader = DedocFileLoader(file_path, **kwargs)
+        self._loader = PythonLoader(file_path, **kwargs)
 
     async def load_documents(self, file_path: str, *args, **kwargs) -> List[Document]:
         """
@@ -73,7 +73,7 @@ class DedocLoader(LoaderProvider):
         if not self._loader:
             self._create_loader(file_path, **kwargs)
 
-        # Assuming DedocFileLoader has an async method to load documents
+        # Assuming PythonFileLoader has an async method to load documents
         self.docs.extend(self._loader.load())
         return self.docs
 
@@ -99,20 +99,20 @@ async def main():
     Main function to orchestrate document loading and text splitting.
     """
     
-    web_loader_provider = WebLoader(requests_per_second=10)
-    web_loader = Loader(web_loader_provider)
-    urls = ["https://en.wikipedia.org/wiki/Shah_Rukh_Khan"]
-    documents = await web_loader.load_documents(urls=urls)
-    print(f"Loaded {len(documents)} documents from web.")
+    # web_loader_provider = WebLoader(requests_per_second=10)
+    # web_loader = Loader(web_loader_provider)
+    # urls = ["https://en.wikipedia.org/wiki/Shah_Rukh_Khan"]
+    # documents = await web_loader.load_documents(urls=urls)
+    # print(f"Loaded {len(documents)} documents from web.")
 
-    # Test DedocLoader
-    print("\nTesting DedocLoader...")
-    dedoc_loader_provider = DedocLoader()
-    dedoc_loader = Loader(dedoc_loader_provider)
-    file_path = "test/sample_doc.txt"
-    dedoc_docs = await dedoc_loader.load_documents(file_path=file_path)
-    print(f"Loaded {len(dedoc_docs)} documents from file.")
-
+    # Test PythonFileLoader
+    print("\nTesting PythonFileLoader...")
+    python_loader_provider = PythonFileLoader()
+    python_loader = Loader(python_loader_provider)
+    file_path = "test/sample_doc.py"
+    python_doc = await python_loader.load_documents(file_path=file_path)
+    print(f"Loaded {len(python_doc)} documents from file.")
+    print(python_doc)
 
 # Run the async main function
 if __name__ == "__main__":
