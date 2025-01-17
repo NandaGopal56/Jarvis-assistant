@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, List, Dict
 import chromadb
+from chromadb import PersistentClient, Collection
 from chromadb.config import Settings
 from chromadb.api.types import Metadata
 
@@ -39,17 +40,6 @@ class VectorDB(ABC):
         """
         pass
 
-    @staticmethod
-    @abstractmethod
-    def create_vector_db(**kwargs) -> 'VectorDB':
-        """
-        Factory method to create an instance of a VectorDB.
-
-        :param kwargs: Additional arguments required for the database initialization.
-        :return: An instance of VectorDB.
-        """
-        pass
-
 # ChromaDB Implementation of VectorDB
 class ChromaDB(VectorDB):
     """
@@ -62,8 +52,9 @@ class ChromaDB(VectorDB):
 
         :param db_dir: Directory path for persistent storage.
         """
-        self.client = chromadb.PersistentClient(path=db_dir)
-        self.collection = self.client.get_or_create_collection(name="jarvis")
+        self.db_dir = db_dir
+        self.client = self._create_vector_client()
+        self.collection = self._create_collection(self.client, collection_name="vectors")
 
     def add_vectors(self, ids: List[str], vectors: List[List[float]], metadatas: List[Metadata]) -> None:
         self.collection.add(ids=ids, embeddings=vectors, metadatas=metadatas)
@@ -74,16 +65,16 @@ class ChromaDB(VectorDB):
     def delete_vectors(self, ids: List[str]) -> None:
         self.collection.delete(ids=ids)
 
-    @staticmethod
-    def create_vector_db(**kwargs) -> 'ChromaDB':
-        """
-        Factory method to create an instance of ChromaDB.
+    def _create_collection(self, client: PersistentClient, collection_name: str) -> Collection:
+        return client.get_or_create_collection(name=collection_name)
 
-        :param kwargs: Additional arguments required for the database initialization.
-        :return: An instance of ChromaDB.
+    def _create_vector_client(self) -> PersistentClient:
         """
-        db_dir = kwargs.get("db_dir", "./chromadb_storage")
-        return ChromaDB(db_dir=db_dir)
+        Private method to create and initialize the ChromaDB client.
+
+        :return: A PersistentClient instance.
+        """
+        return chromadb.PersistentClient(path=self.db_dir)
 
 # Dependency Injection Example
 class VectorDBService:
@@ -125,11 +116,10 @@ class VectorDBService:
         """
         self.vector_db.delete_vectors(ids)
 
-
 # Example Usage
 if __name__ == "__main__":
-    # Create ChromaDB instance directly using the factory method
-    chroma_db = ChromaDB.create_vector_db(db_dir="./chromadb_storage")
+    # Create ChromaDB instance
+    chroma_db = ChromaDB("./chromadb_storage")
 
     # Inject into service
     vector_service = VectorDBService(vector_db=chroma_db)
