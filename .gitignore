@@ -1,6 +1,6 @@
 # Own
 .env
-test/
+test_codes/
 chromadb_storage/
 *.db
 

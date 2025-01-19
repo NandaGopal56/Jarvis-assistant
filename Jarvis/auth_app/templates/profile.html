@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% load form_extras %}
+
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+<!-- Profile Edit Page Content -->
+<div class="min-h-screen flex flex-col items-center justify-center bg-gray-900 p-8">
+    <div class="max-w-4xl w-full bg-black rounded-xl shadow-lg p-8">
+        <!-- Profile Icon -->
+        <div class="flex justify-center mb-8">
+            <div class="bg-blue-600 p-3 rounded-lg">
+                <svg class="text-white" width="32" height="32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16 29c7.2 0 13-5.8 13-13S23.2 3 16 3 3 8.8 3 16s5.8 13 13 13z" fill="currentColor" />
+                    <path d="M12 16l4-4 4 4" stroke="white" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                </svg>
+            </div>
+        </div>
+
+        <!-- Title -->
+        <h2 class="text-3xl font-bold text-center text-white mb-8">Your Profile</h2>
+
+        <!-- Form Container -->
+        <div class="max-w-3xl mx-auto">
+            {% if messages %}
+            <div class="mb-4">
+                {% for message in messages %}
+                <p class="text-sm text-white bg-green-600 p-2 rounded">{{ message }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Profile Form -->
+            <form method="POST" enctype="multipart/form-data" class="space-y-6">
+                {% csrf_token %}
+
+                <!-- Loop Through Fields -->
+                {% for field in form %}
+                <div class="flex flex-col">
+                    <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-400 mb-1">
+                        {{ field.label }}
+                    </label>
+
+                    <!-- Styled Input Fields -->
+                    {{ field }}
+
+                    <!-- Validation Errors -->
+                    {% if field.errors %}
+                    <p class="text-sm text-red-500 mt-1">{{ field.errors|join:", " }}</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <!-- Non-Field Errors -->
+                {% if form.non_field_errors %}
+                <div class="text-red-500">
+                    {% for error in form.non_field_errors %}
+                    <p>{{ error }}</p>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Submit Button -->
+                <div>
+                    <button type="submit"
+                        class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        Update Profile
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

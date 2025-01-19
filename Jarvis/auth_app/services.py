@@ -10,6 +10,7 @@ from django.utils.encoding import force_bytes
 from django.urls import reverse
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 
 User = get_user_model()
 
@@ -112,7 +113,32 @@ class UserRegistrationService:
         return None
 
 
+def update_user_profile(user, post_data, files_data):
+    """
+    This service function handles updating the user's profile.
+    It accepts the current user, POST data (for text fields), and FILES data (for profile picture).
+    """
+    try:
+        # Update the user's basic fields
+        user.first_name = post_data.get('first_name', user.first_name)
+        user.last_name = post_data.get('last_name', user.last_name)
+        
+        # Update profile data
+        user.gender = post_data.get('gender', user.gender)
+        user.mobile = post_data.get('mobile', user.mobile)
+        user.country = post_data.get('country', user.country)
+        
+        # Update user picture if exists in the form
+        if 'profile_picture' in files_data:
+            user.profile_picture = files_data['profile_picture']
+        
+        # Save changes
+        user.save()
 
+        return user
+    except ValidationError as e:
+        # Handle validation errors
+        raise e
 
 class AuthenticationService:
     @staticmethod

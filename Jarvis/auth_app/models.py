@@ -19,6 +19,7 @@ class RoleChoices(Enum):
 class GenderChoices(Enum):
     MALE = 'male'
     FEMALE = 'female'
+    OTHER = 'others'
 
     @classmethod
     def choices(cls):

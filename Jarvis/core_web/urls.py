@@ -1,6 +1,5 @@
 
 from django.urls import path
-from django.views.decorators.csrf import csrf_exempt
 from core_web import views
 
 
