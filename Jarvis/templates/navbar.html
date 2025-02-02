@@ -1,17 +1,17 @@
 <!-- Header Navbar -->
 <nav class="bg-black p-4 shadow-md">
     <div class="container mx-auto flex justify-between items-center">
-        <div class="text-lg font-bold text-blue-600">MyApp</div>
+        <a href="{% url 'home' %}" class="text-lg font-bold text-blue-600">Jarvis</a>
         <div class="space-x-4">
             <a href="{% url 'home' %}" class="text-gray-400 hover:text-white">Home</a>
             <a href="{% url 'chat_with_llm' %}" class="text-gray-400 hover:text-white">Chat App</a>
             <a href="{% url 'search_with_llm' %}" class="text-gray-400 hover:text-white">Search App</a>
             {% if user.is_authenticated %}
-                <a href="{% url 'profile' %}" class="text-gray-400 hover:text-white">Profile</a>
-                <a href="{% url 'logout' %}" class="text-blue-600 hover:text-blue-400">Logout</a>
+            <a href="{% url 'profile' %}" class="text-gray-400 hover:text-white">Profile</a>
+            <a href="{% url 'logout' %}" class="text-blue-600 hover:text-blue-400">Logout</a>
             {% else %}
-                <a href="{% url 'login' %}" class="text-blue-600 hover:text-blue-400">Login</a>
-                <a href="{% url 'register' %}" class="text-blue-600 hover:text-blue-400">Register</a>
+            <a href="{% url 'login' %}" class="text-blue-600 hover:text-blue-400">Login</a>
+            <a href="{% url 'register' %}" class="text-blue-600 hover:text-blue-400">Register</a>
             {% endif %}
         </div>
     </div>

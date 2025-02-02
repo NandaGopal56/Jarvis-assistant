@@ -143,4 +143,6 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL')
 
 SITE_URL = "http://127.0.0.1:8000"
 
-LOGIN_URL = '/auth/login'
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'home'  # Redirect after login
+LOGOUT_REDIRECT_URL = 'login'  # Redirect after logout

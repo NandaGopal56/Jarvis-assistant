@@ -5,11 +5,10 @@ from .models import User, GenderChoices, RoleChoices
 class UserProfileForm(forms.ModelForm):
     class Meta:
         model = User
-        fields = ['email', 'first_name', 'last_name', 'gender', 'mobile', 'country', 'profile_picture', 'role']
+        fields = ['email', 'first_name', 'last_name', 'gender', 'mobile', 'country', 'profile_picture']
 
-    # Make email and role fields read-only
+    # Make email read-only
     email = forms.EmailField(disabled=True)
-    role = forms.ChoiceField(choices=RoleChoices.choices(), disabled=True)
     gender = forms.ChoiceField(choices=GenderChoices.choices())
 
     def __init__(self, *args, **kwargs):

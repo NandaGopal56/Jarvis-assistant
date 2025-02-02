@@ -45,13 +45,18 @@ def verify_email(request, uidb64, token):
 
 # Login View
 def login_view(request):
+    # Redirect to home if the user is already logged in
+    if request.user.is_authenticated:
+        return redirect('home')
+
     if request.method == 'POST':
         email = request.POST.get('email')
         password = request.POST.get('password')
         if AuthenticationService.login_user(request, email, password):
-            return redirect('home')  # Redirect to the home page on successful login
-    return render(request, 'login.html')
+            # Redirect to the home page on successful login
+            return redirect('home')  
 
+    return render(request, 'login.html')
 
 @login_required
 def profile_view(request):
