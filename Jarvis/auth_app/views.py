@@ -41,7 +41,7 @@ def verify_email(request, uidb64, token):
     else:
         messages.error(request, "The verification link is invalid or has expired.")
         return render(request, 'verification_failed.html')
-    
+
 
 # Login View
 def login_view(request):
@@ -57,6 +57,7 @@ def login_view(request):
             return redirect('home')  
 
     return render(request, 'login.html')
+
 
 @login_required
 def profile_view(request):
