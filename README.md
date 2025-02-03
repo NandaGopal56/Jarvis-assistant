@@ -25,9 +25,6 @@ cd Jarvis-assistant
 ```bash
 # Install from requirements.txt
 pip install -r requirements.txt
-
-# Install additional dependencies
-pip install langchain
 ```
 
 ### 3. Run the application
@@ -43,6 +40,13 @@ Open your browser and navigate to:
 ```
 http://localhost:8000
 ```
+
+## Author
+
+**Nanda Gopal Pattanayak**
+
+- GitHub: [@NandaGopal56](https://github.com/NandaGopal56)
+- LinkedIn: [Nanda Gopal Pattanayak](https://www.linkedin.com/in/nanda-gopal-pattanayak-198946223/)
 
 ## Model Providers
 
