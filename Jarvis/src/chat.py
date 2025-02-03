@@ -8,10 +8,6 @@ from src.llm_manager import LanguageModelFactory
 from core_web.django_storage import StorageManager
 from src.configs import ChatStorageType, WorkflowType
 
-
-# Load environment variables
-load_dotenv()
-
 logger = logging.getLogger(__name__)
 
 class State(MessagesState):
@@ -116,7 +112,7 @@ class BotBuilder:
             raise ValueError("Model must be initialized before creating workflow")
             
         match workflow_type:
-            case WorkflowType.CHAT:
+            case WorkflowType.CHATBOT:
                 workflow_builder = ChatBotWorkflowBuilder(self.model)
             case _:
                 raise ValueError(f"Unsupported workflow type: {workflow_type}")

@@ -1,16 +1,18 @@
 from enum import Enum
-from dataclasses import dataclass
 from typing import List
 
 
 class ChatStorageType(Enum):
+    """Supported chat storage types."""
     DJANGO = "django"
     REDIS = "redis"
 
 class WorkflowType(Enum):
-    CHAT = "chat"
+    """Supported workflow types."""
+    CHATBOT = "chatbot"
 
 class ModelProvider(Enum):
+    """Supported model providers."""
     GROQ = "groq"
 
     @classmethod

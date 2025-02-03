@@ -4,7 +4,7 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from src.llm_manager import GroqModelName, OpenAIModelName
 from core_web.django_storage import ChatStorageType
 from rest_framework.decorators import api_view
@@ -27,10 +27,8 @@ def chat_with_llm_view(request):
 def search_with_llm_view(request):
     return render(request, 'search_with_llm.html')
 
-
-
-@csrf_exempt
-@api_view(['POST'])
+@csrf_protect
+@require_http_methods(["POST"])
 def chat_api(request):
     """
     API endpoint to handle chat interactions
@@ -47,7 +45,11 @@ def chat_api(request):
     }
     """
     try:
-        data = json.loads(request.body)
+        # Read the request body once and store it
+        if not hasattr(request, '_cached_body'):
+            request._cached_body = request.body.decode('utf-8')
+        
+        data = json.loads(request._cached_body)
         
         # Check for required fields with specific error messages
         if 'message' not in data:
@@ -64,6 +66,8 @@ def chat_api(request):
         user_message = data['message']
         thread_id = data['thread_id']
 
+        print(f"Received message: {user_message} with thread_id: {thread_id}")
+
         # Default model configuration
         default_model_config = {
             'model_provider': 'groq',
@@ -75,7 +79,7 @@ def chat_api(request):
         chatbot = BotBuilder() \
                     .with_model(provider=ModelProvider.GROQ, model_name=GroqModelName.LLAMA_3_2_1B) \
                     .with_storage(storage_type = ChatStorageType.DJANGO) \
-                    .with_workflow(workflow_type = WorkflowType.CHAT) \
+                    .with_workflow(workflow_type = WorkflowType.CHATBOT) \
                     .with_temperature(0.0) \
                     .build()
 

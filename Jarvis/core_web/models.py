@@ -15,10 +15,14 @@ class Conversation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        db_table = 'conversations'
+        indexes = [
+            models.Index(fields=['user', 'conversation_id'])
+        ]
         ordering = ['-updated_at']
 
     def __str__(self):
-        return f"Conversation {self.id} - {self.title or 'Untitled'}"
+        return f"Conversation {self.conversation_id} - {self.title or 'Untitled'}"
 
 class MessagePair(models.Model):
     STATUS_CHOICES = [
@@ -27,6 +31,7 @@ class MessagePair(models.Model):
         ('failed', 'Failed')
     ]
 
+    message_pair_id = models.BigAutoField(editable=False, primary_key=True)
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='message_pairs')
     
     # User message
@@ -52,7 +57,11 @@ class MessagePair(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = 'MessagePair'
+        indexes = [
+            models.Index(fields=['conversation', 'message_pair_id'])
+        ]
         ordering = ['user_message_timestamp']
 
     def __str__(self):
-        return f"Message Pair {self.id} in conversation {self.conversation_id}"
+        return f"Message Pair {self.message_pair_id} in conversation {self.conversation_id}"
