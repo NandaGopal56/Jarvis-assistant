@@ -3,6 +3,7 @@
 test_codes/
 chat_history/
 chromadb_storage/
+logs/
 *.db
 
 # Byte-compiled / optimized / DLL files
