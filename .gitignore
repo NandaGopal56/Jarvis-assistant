@@ -1,6 +1,7 @@
 # Own
 .env
 test_codes/
+chat_history/
 chromadb_storage/
 *.db
 

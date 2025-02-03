@@ -7,17 +7,28 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-class GroqModelName(Enum):
-    """Supported Groq model names."""
-    
-    LLAMA_3_2_1B = "llama-3.2-1b-preview"
-    LLAMA_3_3_70B = "llama-3.3-70b-versatile"
-    MIXTRAL_8X7B = "mixtral-8x7b-32768"
+class BaseModelName(str, Enum):
+    """Base class for model names."""
     
     @classmethod
     def get_model_names(cls) -> List[str]:
         """Get list of all available model names."""
         return [model.value for model in cls]
+
+class GroqModelName(BaseModelName):
+    """Supported Groq model names."""
+    
+    LLAMA_3_2_1B = "llama-3.2-1b-preview"
+    LLAMA_3_3_70B = "llama-3.3-70b-versatile"
+    MIXTRAL_8X7B = "mixtral-8x7b-32768"
+
+class OpenAIModelName(BaseModelName):
+    """Supported OpenAI model names."""
+    
+    GPT_3_5_TURBO = "gpt-3.5-turbo"
+    GPT_4 = "gpt-4"
+    GPT_4_TURBO = "gpt-4-turbo-preview"
+
 
 class LanguageModel(ABC):
     """Abstract base class for language model implementations."""
@@ -40,7 +51,7 @@ class LanguageModelFactory:
     """Factory class to create language model instances."""
     
     @staticmethod
-    def create_model(provider: str, model_name: GroqModelName) -> LanguageModel:
+    def create_model(provider: str, model_name: BaseModelName) -> LanguageModel:
         """Create a language model instance for the specified provider.
         
         Args:

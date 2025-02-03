@@ -5,7 +5,7 @@ from typing import List, Dict
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-from enum import Enum
+from src.configs import ChatStorageType
 
 
 @dataclass
@@ -20,10 +20,6 @@ class MessageData:
     processing_time: Optional[float] = None
     error_message: str = ""
 
-
-class ChatStorageType(Enum):
-    DJANGO = "django"
-    REDIS = "redis"
 
 class ChatStorageInterface(ABC):
     """Abstract interface for chat storage operations"""
