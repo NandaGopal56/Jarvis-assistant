@@ -5,11 +5,11 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from src.llm_manager import GroqModelName
+from src.llm_manager import GroqModelName, OpenAIModelName
 from core_web.django_storage import ChatStorageType
 from rest_framework.decorators import api_view
 from src.chat import BotBuilder
-from src.configs import WorkflowType
+from src.configs import WorkflowType, ModelProvider
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ def chat_api(request):
 
         # Initialize chatbot with config
         chatbot = BotBuilder() \
-                    .with_model(provider="groq", model_name=GroqModelName.LLAMA_3_2_1B) \
+                    .with_model(provider=ModelProvider.GROQ, model_name=GroqModelName.LLAMA_3_2_1B) \
                     .with_storage(storage_type = ChatStorageType.DJANGO) \
                     .with_workflow(workflow_type = WorkflowType.CHAT) \
                     .with_temperature(0.0) \

@@ -3,35 +3,26 @@ from typing import List, Tuple
 from enum import Enum
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
+from src.configs import BaseModelName, GroqModelName, OpenAIModelName, ModelProvider
 
 # Load environment variables from .env file
 load_dotenv()
 
-class BaseModelName(str, Enum):
-    """Base class for model names."""
-    
-    @classmethod
-    def get_model_names(cls) -> List[str]:
-        """Get list of all available model names."""
-        return [model.value for model in cls]
-
-class GroqModelName(BaseModelName):
-    """Supported Groq model names."""
-    
-    LLAMA_3_2_1B = "llama-3.2-1b-preview"
-    LLAMA_3_3_70B = "llama-3.3-70b-versatile"
-    MIXTRAL_8X7B = "mixtral-8x7b-32768"
-
-class OpenAIModelName(BaseModelName):
-    """Supported OpenAI model names."""
-    
-    GPT_3_5_TURBO = "gpt-3.5-turbo"
-    GPT_4 = "gpt-4"
-    GPT_4_TURBO = "gpt-4-turbo-preview"
-
 
 class LanguageModel(ABC):
     """Abstract base class for language model implementations."""
+    
+    @abstractmethod
+    def _validate_model_name(self, model_name) -> None:
+        """Validate that the provided model name is supported.
+        
+        Args:
+            model_name: The model name to validate
+            
+        Raises:
+            ValueError: If the model name is not supported
+        """
+        pass
     
     @abstractmethod
     def generate_response(self, messages: List[Tuple[str, str]]) -> str:
@@ -42,10 +33,23 @@ class GroqLanguageModel(LanguageModel):
     """Groq-specific implementation of the language model."""
     
     def __init__(self, model_name: GroqModelName):
+        self._validate_model_name(model_name)
         self._model = ChatGroq(model_name=model_name.value)
+    
+    def _validate_model_name(self, model_name: GroqModelName) -> None:
+        """Validate that the provided model name is supported by Groq"""
+        
+        supported_models = set(GroqModelName.get_model_names())
+        if model_name.value not in supported_models:
+            raise ValueError(
+                f"Unsupported Groq model: {model_name.value}. "
+                f"Supported models: {', '.join(supported_models)}"
+            )
     
     def generate_response(self, messages: List[Tuple[str, str]]) -> str:
         return self._model.invoke(input=messages)
+
+
 
 class LanguageModelFactory:
     """Factory class to create language model instances."""
@@ -62,15 +66,16 @@ class LanguageModelFactory:
         Raises:
             ValueError: If provider is not supported
         """
-        if provider.lower() == "groq":
+        if provider == ModelProvider.GROQ:
             return GroqLanguageModel(model_name)
-        raise ValueError(f"Unsupported provider: {provider}. Supported providers: ['groq']")
+        
+        raise ValueError(f"Unsupported provider: {provider}. Supported providers: [{ModelProvider.get_provider_names()}]")
 
 # Example usage
 if __name__ == "__main__":
     # Create language model instance
     model = LanguageModelFactory.create_model(
-        provider="groq",
+        provider=ModelProvider.GROQ,
         model_name=GroqModelName.LLAMA_3_2_1B
     )
     

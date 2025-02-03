@@ -1,15 +1,12 @@
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, RemoveMessage
-from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, END, MessagesState, StateGraph
-from typing import Literal, Dict, Any, List, Optional
+from typing import Dict, Any, List
 import logging
-from datetime import datetime
-from pathlib import Path
-from src.llm_manager import LanguageModelFactory, GroqModelName
+from src.llm_manager import LanguageModelFactory
 from core_web.django_storage import StorageManager
-from src.configs import ChatStorageType, ChatConfig, WorkflowType
+from src.configs import ChatStorageType, WorkflowType
 
 
 # Load environment variables
@@ -97,7 +94,7 @@ class ChatBotWorkflowBuilder:
 class BotBuilder:
     """Builder for constructing ChatBot instances"""
     def __init__(self):
-        self.model = None
+        self.with_provider = None
         self.storage = None
         self.workflow = None
         self.temperature = None
@@ -132,7 +129,7 @@ class BotBuilder:
         return self
 
     def _validate_components(self) -> None:
-        """Private method to validate all required components before building"""
+        """validate all required components before building the bot"""
         missing_components = []
         
         if not self.model:
@@ -151,6 +148,7 @@ class BotBuilder:
             raise ValueError(f"Missing required components: {', '.join(missing_components)}")
 
     def build(self) -> 'Bot':
+        """validate all components and build the bot"""
         self._validate_components()
 
         return Bot(
@@ -195,79 +193,3 @@ class Bot:
         
         logger.warning("Failed to generate AI response")
         return "I apologize, but I couldn't generate a response."
-
-
-# def print_message(role: str, content: str) -> None:
-#     """Print a formatted chat message"""
-#     print(f"\n{role}: {content}")
-
-# def test_memory_functionality(chatbot):
-#     """Test the chatbot's memory and summary functionality with predefined questions"""
-#     test_questions = [
-#         "Hey:",
-#         "how are you",
-#         "what is my name",
-#         "my name is John",
-#         "what is my name",
-#         "what is capital of india",
-#         "what is capital of delhi",
-#         "what question i asked you earlier",
-#         "what is my name"
-#     ]
-    
-#     logger.info("Starting memory functionality test")
-#     for i, question in enumerate(test_questions, 1):
-#         print(f"\nTest Question {i}/{len(test_questions)}: {question}")
-#         response = chatbot.chat(question)
-#         print_message("Bot", response)
-
-# def interactive_chat(chatbot):
-#     """Run the interactive chat mode"""
-#     print("\nStarting interactive chat. Type 'quit' to exit.")
-#     # Main chat loop
-#     while True:
-#         # Get user input
-#         user_message = input("\nYou: ").strip()
-#         # Check for quit command
-#         if user_message.lower() in ['quit', 'exit', 'bye']:
-#             logger.info("User requested to quit the application")
-#             print("\nGoodbye!")
-#             break
-            
-#         # Get chatbot response
-#         if user_message:
-#             logger.info(f"Processing user message: {user_message}")
-#             response = chatbot.chat(user_message)
-#             print_message("Bot", response)
-#         else:
-#             logger.warning("Empty message received from user")
-#             print("Please enter a message.")
-
-# def main():
-#     # Example configuration
-#     config = ChatConfig(
-#         model_provider="groq",
-#         model_name=GroqModelName.LLAMA_3_2_1B,
-#         storage_type=ChatStorageType.DJANGO,
-#         temperature=0
-#     )
-    
-#     # Initialize chatbot with config
-#     logger.info("Starting chatbot application")
-#     chatbot = ChatBot(config)
-    
-#     # Ask if user wants to run test sequence or interactive mode
-#     print("\nChatbot initialized. Would you like to:")
-#     print("1. Run test sequence")
-#     print("2. Start interactive chat")
-#     choice = input("Enter your choice (1 or 2): ").strip() or "2"
-    
-#     return chatbot, choice
-
-# if __name__ == "__main__":
-#     chatbot, choice = main()
-    
-#     if choice == "1":
-#         test_memory_functionality(chatbot)
-#     else:
-#         interactive_chat(chatbot)
