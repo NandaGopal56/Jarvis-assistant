@@ -1,15 +1,17 @@
 import json
 import logging
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt, csrf_protect
-from src.llm_manager import GroqModelName, OpenAIModelName
+from django.views.decorators.csrf import csrf_protect
+from src.llm_manager import GroqModelName
 from core_web.django_storage import ChatStorageType
 from rest_framework.decorators import api_view
 from src.chat import BotBuilder
 from src.configs import WorkflowType, ModelProvider
+from core_web.models import Conversation
+
 
 logger = logging.getLogger(__name__)
 
@@ -19,14 +21,56 @@ def home_view(request):
 
 # Chat with LLM
 @login_required
-def chat_with_llm_view(request):
-    return render(request, 'chat_with_llm.html')
+def chat_view(request, conversation_id=None):
+    """
+    Single view to handle both new chats and existing conversations
+    """
+    # Get all conversations for the sidebar
+    conversations = Conversation.objects.filter(user=request.user).order_by('-updated_at')
+    
+    # If conversation_id is provided, get that specific conversation
+    current_conversation = None
+    if conversation_id:
+        current_conversation = Conversation.objects.filter(
+            conversation_id=conversation_id,
+            user=request.user
+        ).first()
+        
+        # If invalid conversation_id, redirect to main chat page
+        if not current_conversation:
+            return redirect('chat')
+    
+    return render(request, 'chat.html', {
+        'conversations': conversations,
+        'current_conversation': current_conversation
+    })
+
+@login_required
+def create_new_chat(request):
+    """
+    Creates a new conversation and redirects to its chat view
+    """
+    conversation = Conversation.objects.create(
+        user=request.user,
+        title="New Chat"
+    )
+    
+    return redirect('chat_with_id', conversation_id=conversation.conversation_id)
 
 # Search with LLM
 @login_required
 def search_with_llm_view(request):
     return render(request, 'search_with_llm.html')
 
+# Initialize chatbot with config
+chatbot = BotBuilder() \
+            .with_model(provider=ModelProvider.GROQ, model_name=GroqModelName.LLAMA_3_3_70B) \
+            .with_storage(storage_type = ChatStorageType.DJANGO) \
+            .with_workflow(workflow_type = WorkflowType.CHATBOT) \
+            .with_temperature(0.0) \
+            .build()
+
+    
 @csrf_protect
 @require_http_methods(["POST"])
 def chat_api(request):
@@ -68,20 +112,7 @@ def chat_api(request):
 
         print(f"Received message: {user_message} with thread_id: {thread_id}")
 
-        # Default model configuration
-        default_model_config = {
-            'model_provider': 'groq',
-            'model_name': 'gpt-3.5-turbo',
-        }
-        model_config = data.get('model_config', default_model_config)
-
-        # Initialize chatbot with config
-        chatbot = BotBuilder() \
-                    .with_model(provider=ModelProvider.GROQ, model_name=GroqModelName.LLAMA_3_2_1B) \
-                    .with_storage(storage_type = ChatStorageType.DJANGO) \
-                    .with_workflow(workflow_type = WorkflowType.CHATBOT) \
-                    .with_temperature(0.0) \
-                    .build()
+        global chatbot
 
         # Get response from chatbot
         response = chatbot.chat(user_message, thread_id)

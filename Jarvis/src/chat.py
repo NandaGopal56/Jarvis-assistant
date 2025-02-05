@@ -1,18 +1,25 @@
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, RemoveMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, RemoveMessage, BaseMessage, AnyMessage
 from dotenv import load_dotenv
+from typing_extensions import TypedDict
+import traceback
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, END, MessagesState, StateGraph
-from typing import Dict, Any, List
+from langgraph.graph.message import add_messages
+from typing import Dict, Any, List, Annotated
 import logging
 from src.llm_manager import LanguageModelFactory
 from core_web.django_storage import StorageManager
 from src.configs import ChatStorageType, WorkflowType
+from core_web.models import MessagePair
+import time
 
 logger = logging.getLogger(__name__)
 
 class State(MessagesState):
     """State class that extends MessagesState to include summary"""
+    # messages: list[BaseMessage]
     summary: str
+    thread_id: int
 
 
 
@@ -21,36 +28,58 @@ class ChatBotWorkflowBuilder:
     def __init__(self, model):
         self.model = model
         self.memory_saver = MemorySaver()
+        self.workflow = None
 
     def _call_model(self, state: State) -> Dict[str, List[AIMessage]]:
         """Call the model with the current state"""
-        logger.info("Calling model with current state")
-        summary = state.get("summary", "")
-        if summary:
-            system_message = f"Summary of conversation earlier: {summary}"
-            messages = [SystemMessage(content=system_message)] + state["messages"]
-        else:
-            messages = state["messages"]
-            
-        formatted_messages = [(msg.type, msg.content) for msg in messages]
-        response = self.model.generate_response(formatted_messages)
-        ai_message = AIMessage(content=response.content)
-        logger.info(f"Model response received: {response.content}...")
-        return {"messages": [ai_message]}
+        print(f"no of messages in state: {len(state['messages'])}")
+        print(f"messages in state: {state['messages']}")
+        print('-------------------------------------------------')
+
+        system_prompt = (
+            "You are a helpful AI assistant. "
+            "Answer all questions to the best of your ability. "
+            "The provided chat history includes a summary of the earlier conversation."
+        )
+
+        system_message = SystemMessage(content=system_prompt)
+        
+        # Add summary if it exists
+        if state.get("summary", ""):
+            system_message = SystemMessage(
+                content=f"{system_prompt}\n\nSummary of conversation earlier: {state['summary']}"
+            )
+
+
+        # Combine messages in order: system message, kept messages, and last message
+        question = [system_message] + state["messages"]
+
+        print(f"question: {question}")
+        print('-------------------------------------------------')
+
+        # Generate response
+        response = self.model.generate_response(question)
+        
+        return {"messages": [response]}
 
     def _should_continue(self, state: State):
         """Return the next node to execute."""
+
         message_count = len(state["messages"])
-        decision = "summarize_conversation" if message_count > 6 else END
-        logger.info(f"Conversation flow check: {message_count} messages in state, decision: {decision}")
+        decision = "summarize_conversation" if message_count > 2 else END
+
+        print(f"no of messages in state in should_continue: {len(state['messages'])}")
+        print(f"Conversation flow check: {message_count} messages in state, decision: {decision}")
+
         return decision
 
     def _summarize_conversation(self, state: State) -> Dict[str, Any]:
         """Summarize the conversation state"""
-        logger.info("Summarizing conversation")
+        # First, we summarize the conversation
         summary = state.get("summary", "")
-
         if summary:
+            # If a summary already exists, we use a different system prompt
+            # to summarize it than if one didn't
             summary_message = (
                 f"This is summary of the conversation to date: {summary}\n\n"
                 "Extend the summary by taking into account the new messages above:"
@@ -59,16 +88,10 @@ class ChatBotWorkflowBuilder:
             summary_message = "Create a summary of the conversation above:"
 
         messages = state["messages"] + [HumanMessage(content=summary_message)]
-        response = self.model.invoke(messages)
 
-        logger.info(f"state messages: {state['messages']}\n")
-        logger.info(f"All ids available: {[m.id for m in state['messages']]}\n")
-        logger.info(f"Finally kept ids: {[m.id for m in state['messages'][-2:]]}\n")
+        response = self.model.generate_response(messages)
         
-        # Keep only the last two messages
         delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-2]]
-        logger.info(f"Summary generated: {response.content}...")
-        logger.info(f"messages after Summary generated: {delete_messages}...")
         return {"summary": response.content, "messages": delete_messages}
 
     def build(self) -> StateGraph:
@@ -85,8 +108,10 @@ class ChatBotWorkflowBuilder:
         )
         workflow.add_edge("summarize_conversation", END)
         
-        return workflow.compile(checkpointer=self.memory_saver)
-
+        self.workflow = workflow.compile(checkpointer=self.memory_saver)
+        
+        return self.workflow
+    
 class BotBuilder:
     """Builder for constructing ChatBot instances"""
     def __init__(self):
@@ -155,7 +180,7 @@ class BotBuilder:
         )
 
 class Bot:
-    """Refactored ChatBot class that uses builder pattern"""
+    """Bot class that uses builder pattern"""
     def __init__(self, model, storage, workflow, temperature: float = 0):
         self.model = model
         self.storage = storage
@@ -164,28 +189,83 @@ class Bot:
 
     def chat(self, message: str, thread_id: str) -> str:
         """Process a single chat message and return the response"""
-        logger.info(f"Processing chat message for thread {thread_id}")
-        logger.info(f"User message: {message}")
-        config = {"configurable": {"thread_id": thread_id}}
+
+        try:
+            print('#####################################################################')
+            
+            # Fetch existing messages from storage
+            existing_messages = []
+            summary = ""
+            thread_history = self.storage.load_conversation(thread_id)
+            if thread_history:
+                for msg_pair in thread_history:
+                    if msg_pair.user_message:
+                        existing_messages.append(HumanMessage(content=msg_pair.user_message))
+                    if msg_pair.ai_message:
+                        existing_messages.append(AIMessage(content=msg_pair.ai_message))
+                    if msg_pair.summary:
+                        summary = msg_pair.summary
+            
+            input_message = HumanMessage(content=message)
+            all_messages = existing_messages + [input_message]
+
+            print(f"existing_messages: {existing_messages}")
+            print('-------------------------------------------------')
+
+            config = {"configurable": {"thread_id": thread_id}}
+            
+            # Get start time for processing
+            start_time = time.time()
+
+            # Clear any existing state first
+            # self.workflow.update_state(config=config, 
+            #                            values={"messages": existing_messages, "summary": summary, "thread_id": thread_id}, 
+            #                            as_node="conversation"
+            #                         )
+
+            # print("Cleared existing state")
+            # print(f"State after clearing: {self.workflow.get_state(config=config)}")
+            # print('-------------------------------------------------')
+
+            response = self.workflow.invoke(
+                {"messages": [input_message]},
+                config=config
+            )
+            
+            # Calculate processing time
+            processing_time = time.time() - start_time
+            
+            ai_response = None
+            if response and "messages" in response:
+                for msg in response["messages"]:
+                    if isinstance(msg, AIMessage):
+                        ai_response = msg
+            
+            # Prepare response content and status
+            response_content = ai_response.content if ai_response else "I apologize, but I couldn't generate a response."
+            status = "completed" if ai_response else "error"
+            error_message = "" if ai_response else "Failed to generate AI response"
+            
+            # Create message data for storage
+            message_data = MessagePair(
+                user_message=message,
+                ai_message=response_content,
+                summary=response.get("summary", None) if response else None,
+                tokens_used={},  # You might want to add actual token counting
+                model_version=self.model.model_name if hasattr(self.model, 'model_name') else "",
+                status=status,
+                processing_time=processing_time,
+                error_message=error_message
+            )
+            
+            # Save to storage
+            storage_success = self.storage.save_message(thread_id, message_data)
+            if not storage_success:
+                logger.error(f"Failed to save message to storage for thread {thread_id}, storage_success: {storage_success}")
+            
+            return response_content
         
-        existing_messages = []
-        input_message = HumanMessage(content=message)
-        all_messages = existing_messages + [input_message]
-        
-        response = self.workflow.invoke(
-            {"messages": all_messages},
-            config=config
-        )
-        
-        ai_response = None
-        if response and "messages" in response:
-            for msg in response["messages"]:
-                if isinstance(msg, AIMessage):
-                    ai_response = msg
-        
-        if ai_response:
-            logger.info(f"AI response for thread {thread_id}: {ai_response.content}")
-            return ai_response.content
-        
-        logger.warning("Failed to generate AI response")
-        return "I apologize, but I couldn't generate a response."
+        except Exception as e:
+            print(f"Error in chat: {e}")
+            print(traceback.format_exc())
+            return "I apologize, but I couldn't generate a response."
