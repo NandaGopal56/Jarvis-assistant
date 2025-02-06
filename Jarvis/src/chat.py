@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 class State(MessagesState):
     """State class that extends MessagesState to include summary"""
-    # messages: list[BaseMessage]
     summary: str
     thread_id: int
 
@@ -33,17 +32,22 @@ class ChatBotWorkflowBuilder:
 
     def _memory_state_update(self, state: State) -> Dict[str, List[AIMessage]]:
         """Update the memory state"""
-        print(f"state in memory_state_update: {state}\n")
+        logger.info("Starting memory state update")
+        logger.debug(f"Initial state: {state}")
+        logger.info(f"Initial message count: {len(state.get('messages', []))}")
 
         last_human_message = state.get("messages")[-1]
-        print(f"last_human_message: {last_human_message}\n")
+        logger.debug(f"Processing last human message: {last_human_message}")
         
         thread_id = state.get("thread_id")
+        logger.info(f"Processing thread ID: {thread_id}")
             
         # Fetch messages from storage
         existing_messages = []
         summary = ""
         thread_history = self.storage.load_conversation(thread_id, limit=1)
+        logger.info(f"Retrieved {len(thread_history)} messages from storage")
+
         if thread_history:
             for msg_pair in thread_history:
                 if msg_pair.user_message:
@@ -52,26 +56,27 @@ class ChatBotWorkflowBuilder:
                     existing_messages.append(AIMessage(content=msg_pair.ai_message))
                 if msg_pair.summary:
                     summary = msg_pair.summary
+                    logger.debug(f"Retrieved summary: {summary}")
 
-
+        # Update state with messages
         delete_messages = [RemoveMessage(id=m.id) for m in state["messages"]] \
             + existing_messages \
             + [HumanMessage(content=last_human_message.content)]
         
         new_state = {
-            "summary": "default summary",
+            "summary": summary,
             "messages": delete_messages
         }
 
-        print(f"new_state returned from memory_state_update: {new_state}\n")
-
-        print('-------------------------------------------------\n')
+        logger.info(f"Memory state update complete. New message count: {len(delete_messages)}")
+        logger.debug(f"Final state after memory update: {new_state}")
         return new_state
 
     def _call_model(self, state: State) -> Dict[str, List[AIMessage]]:
         """Call the model with the current state"""
-        print(f"no of messages in state in call_model: {len(state['messages'])}\n")
-        print(f"messages in state in call_model: {state}\n")
+        logger.info("Starting model call")
+        logger.info(f"Current message count: {len(state['messages'])}")
+        logger.debug(f"Current state: {state}")
 
         system_prompt = (
             "You are a helpful AI assistant. "
@@ -83,57 +88,61 @@ class ChatBotWorkflowBuilder:
         
         # Add summary if it exists
         if state.get("summary", ""):
+            logger.debug(f"Including summary in system message: {state['summary']}")
             system_message = SystemMessage(
                 content=f"{system_prompt}\n\nSummary of conversation earlier: {state['summary']}"
             )
 
-
-        # Combine messages in order: system message, kept messages, and last message
+        # Combine messages
         question = [system_message] + state["messages"]
-
-        print(f"question: {question}")
-        print('-------------------------------------------------')
+        logger.debug(f"Prepared question for model: {question}")
 
         # Generate response
         response = self.model.generate_response(question)
-
-        print(f"response: {response}")
-        print('-------------------------------------------------')
+        logger.info("Model response generated")
+        logger.debug(f"Model response: {response}")
         
         return {"messages": [response]}
 
     def _should_continue(self, state: State):
         """Return the next node to execute."""
-
         message_count = len(state["messages"])
         decision = "summarize_conversation" if message_count > 2 else END
 
-        print(f"no of messages in state in should_continue: {len(state['messages'])}")
-        print(f"Conversation flow check: {message_count} messages in state, decision: {decision}")
+        logger.info(f"Workflow decision check - Messages: {message_count}")
+        logger.info(f"Decision: {decision}")
+        logger.debug(f"Current state at decision point: {state}")
 
         return decision
 
     def _summarize_conversation(self, state: State) -> Dict[str, Any]:
         """Summarize the conversation state"""
-        # First, we summarize the conversation
+        logger.info("Starting conversation summarization")
+        logger.info(f"Current message count: {len(state['messages'])}")
+        logger.debug(f"State before summarization: {state}")
+
         summary = state.get("summary", "")
         if summary:
-            # If a summary already exists, we use a different system prompt
-            # to summarize it than if one didn't
+            logger.debug(f"Existing summary found: {summary}")
             summary_message = (
                 f"This is summary of the conversation to date: {summary}\n\n"
                 "Extend the summary by taking into account the new messages above:"
             )
         else:
+            logger.debug("No existing summary found, creating new summary")
             summary_message = "Create a summary of the conversation above:"
 
         messages = state["messages"] + [HumanMessage(content=summary_message)]
-
         response = self.model.generate_response(messages)
         
         delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-2]]
-        print(f"delete_messages: {delete_messages}")
-        return {"summary": response.content, "messages": delete_messages}
+        
+        final_state = {"summary": response.content, "messages": delete_messages}
+        logger.info("Summarization complete")
+        logger.info(f"Final message count: {len(delete_messages)}")
+        logger.debug(f"Final state after summarization: {final_state}")
+        
+        return final_state
 
     def build(self) -> StateGraph:
         """Create and return the workflow graph"""
@@ -235,51 +244,23 @@ class Bot:
 
     def chat(self, message: str, thread_id: str) -> str:
         """Process a single chat message and return the response"""
-
         try:
-            print('#####################################################################')
-            
-            # Fetch existing messages from storage
-            # existing_messages = []
-            # summary = ""
-            # thread_history = self.storage.load_conversation(thread_id)
-            # if thread_history:
-            #     for msg_pair in thread_history:
-            #         if msg_pair.user_message:
-            #             existing_messages.append(HumanMessage(content=msg_pair.user_message))
-            #         if msg_pair.ai_message:
-            #             existing_messages.append(AIMessage(content=msg_pair.ai_message))
-            #         if msg_pair.summary:
-            #             summary = msg_pair.summary
+            logger.info("Starting new chat interaction")
+            logger.info(f"Thread ID: {thread_id}")
+            logger.debug(f"User message: {message}")
             
             input_message = HumanMessage(content=message)
-            # all_messages = existing_messages + [input_message]
-
-            # print(f"existing_messages: {existing_messages}")
-            # print('-------------------------------------------------')
-
             config = {"configurable": {"thread_id": thread_id}}
             
-            # Get start time for processing
             start_time = time.time()
-
-            # Clear any existing state first
-            # self.workflow.update_state(config=config, 
-            #                            values={"messages": existing_messages, "summary": summary, "thread_id": thread_id}, 
-            #                            as_node="conversation"
-            #                         )
-
-            # print("Cleared existing state")
-            # print(f"State after clearing: {self.workflow.get_state(config=config)}")
-            # print('-------------------------------------------------')
 
             response = self.workflow.invoke(
                 {"messages": [input_message], "thread_id": thread_id},
                 config=config
             )
             
-            # Calculate processing time
             processing_time = time.time() - start_time
+            logger.info(f"Processing completed in {processing_time:.2f} seconds")
             
             ai_response = None
             if response and "messages" in response:

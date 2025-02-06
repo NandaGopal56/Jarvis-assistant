@@ -159,30 +159,29 @@ LOGGING = {
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
+            'format': '[{levelname}] {asctime} {filename}:{lineno} - {message}',
             'style': '{',
         },
     },
     'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
+        # 'console': {
+        #     'class': 'logging.StreamHandler',
+        #     'formatter': 'verbose',
+        #     'level': 'DEBUG',
+        # },
         'file': {
             'class': 'logging.FileHandler',
-            'filename': 'debug.log',
+            'filename': str(LOGS_DIR / 'debug.log'),
             'formatter': 'verbose',
+            'level': 'DEBUG',
+            'mode': 'a',
         },
     },
     'loggers': {
-        '': {  # Root logger
-            'handlers': ['console', 'file'],
+        '': {
+            'handlers': ['file'],
             'level': 'INFO',
-        },
-        'src': {  # Logger for your src directory
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
+            'propagate': True,
         },
     },
 }
