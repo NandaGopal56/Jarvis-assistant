@@ -2,8 +2,14 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from django.db.models import JSONField
+from enum import Enum
 
 # Create your models here.
+
+class AIChatMessageStatus(Enum):
+    PROCESSING = 'processing'
+    COMPLETED = 'completed'
+    FAILED = 'failed'
 
 class Conversation(models.Model):
     conversation_id = models.BigAutoField(editable=False, primary_key=True)
@@ -25,12 +31,6 @@ class Conversation(models.Model):
         return f"Conversation {self.conversation_id} - {self.title or 'Untitled'}"
 
 class MessagePair(models.Model):
-    STATUS_CHOICES = [
-        ('processing', 'Processing'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed')
-    ]
-
     message_pair_id = models.BigAutoField(editable=False, primary_key=True)
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='message_pairs')
     
@@ -48,7 +48,7 @@ class MessagePair(models.Model):
     model_version = models.CharField(max_length=50, blank=True)
     
     # Status tracking
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='completed')
+    status = models.CharField(max_length=20, choices=[(status.value, status.name) for status in AIChatMessageStatus])
     processing_time = models.FloatField(null=True, blank=True)  # in seconds
     error_message = models.TextField(blank=True)
 

@@ -1,17 +1,14 @@
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, RemoveMessage, BaseMessage, AnyMessage
-from dotenv import load_dotenv
-from typing_extensions import TypedDict
-import traceback
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, RemoveMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, END, MessagesState, StateGraph
-from langgraph.graph.message import add_messages
-from typing import Dict, Any, List, Annotated
-import logging
+from typing import Dict, Any, List
 from src.llm_manager import LanguageModelFactory
 from core_web.django_storage import StorageManager
 from src.configs import ChatStorageType, WorkflowType
-from core_web.models import MessagePair
+from core_web.models import MessagePair, AIChatMessageStatus
 import time
+import traceback
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -269,16 +266,16 @@ class Bot:
                         ai_response = msg
             
             # Prepare response content and status
-            response_content = ai_response.content if ai_response else "I apologize, but I couldn't generate a response."
-            status = "completed" if ai_response else "error"
+            status = AIChatMessageStatus.COMPLETED.value if ai_response else AIChatMessageStatus.FAILED.value
             error_message = "" if ai_response else "Failed to generate AI response"
+            response_content = ai_response.content if ai_response else "I apologize, but I couldn't generate a response."
             
             # Create message data for storage
             message_data = MessagePair(
                 user_message=message,
                 ai_message=response_content,
                 summary=response.get("summary", None) if response else None,
-                tokens_used={},  # You might want to add actual token counting
+                tokens_used={},  #TODO: add actual token counting
                 model_version=self.model.model_name if hasattr(self.model, 'model_name') else "",
                 status=status,
                 processing_time=processing_time,
@@ -289,10 +286,10 @@ class Bot:
             storage_success = self.storage.save_message(thread_id, message_data)
             if not storage_success:
                 logger.error(f"Failed to save message to storage for thread {thread_id}, storage_success: {storage_success}")
-            
-            return response_content
         
         except Exception as e:
-            print(f"Error in chat: {e}")
-            print(traceback.format_exc())
-            return "I apologize, but I couldn't generate a response."
+            logger.error(f"Error in chat: {e}")
+            logger.error(traceback.format_exc())
+            response_content = "I apologize, but I couldn't generate a response."
+
+        return response_content

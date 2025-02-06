@@ -10,8 +10,9 @@ from core_web.django_storage import ChatStorageType
 from rest_framework.decorators import api_view
 from src.chat import BotBuilder
 from src.configs import WorkflowType, ModelProvider
-from core_web.models import Conversation
-
+from core_web.models import Conversation, AIChatMessageStatus
+from core_web.services.chat_service import ChatService
+from src.utils import generate_chat_title
 
 logger = logging.getLogger(__name__)
 
@@ -19,26 +20,34 @@ logger = logging.getLogger(__name__)
 def home_view(request):
     return render(request, 'home.html')
 
+
+@login_required
+def chat_home(request):
+
+    # Get or create an empty conversation
+    conversation, message = ChatService.create_or_get_empty_chat(request.user)
+
+    # Redirect to the chat view with the empty conversation ID
+    return redirect('chat_with_id', conversation.conversation_id)
+
 # Chat with LLM
 @login_required
-def chat_view(request, conversation_id=None):
+def chat_view(request, conversation_id):
     """
     Single view to handle both new chats and existing conversations
     """
     # Get all conversations for the sidebar
     conversations = Conversation.objects.filter(user=request.user).order_by('-updated_at')
     
-    # If conversation_id is provided, get that specific conversation
-    current_conversation = None
-    if conversation_id:
-        current_conversation = Conversation.objects.filter(
-            conversation_id=conversation_id,
-            user=request.user
-        ).first()
+    current_conversation_set = conversations.filter(conversation_id=conversation_id)
+    if current_conversation_set:
+        current_conversation = current_conversation_set[0]
+    else:
+        current_conversation = None
         
-        # If invalid conversation_id, redirect to main chat page
-        if not current_conversation:
-            return redirect('chat')
+    # If invalid conversation_id, redirect to main chat page
+    if not current_conversation:
+        return redirect('chat_home')
     
     return render(request, 'chat.html', {
         'conversations': conversations,
@@ -46,21 +55,29 @@ def chat_view(request, conversation_id=None):
     })
 
 @login_required
+@csrf_protect
+@require_http_methods(["POST"])
 def create_new_chat(request):
     """
-    Creates a new conversation and redirects to its chat view
+    API endpoint that creates a new conversation or returns existing empty conversation.
+    Returns JSON with conversation ID and redirect URL.
     """
-    conversation = Conversation.objects.create(
-        user=request.user,
-        title="New Chat"
-    )
-    
-    return redirect('chat_with_id', conversation_id=conversation.conversation_id)
+    try:
+        conversation, message = ChatService.create_or_get_empty_chat(request.user)
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': message,
+            'thread_id': conversation.conversation_id,
+        })
 
-# Search with LLM
-@login_required
-def search_with_llm_view(request):
-    return render(request, 'search_with_llm.html')
+    except Exception as e:
+        logger.error(f"Error creating new chat: {str(e)}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
 
 # Initialize chatbot with config
 chatbot = BotBuilder() \
@@ -117,9 +134,16 @@ def chat_api(request):
         # Get response from chatbot
         response = chatbot.chat(user_message, thread_id)
 
+        conversation = Conversation.objects.get(conversation_id=thread_id)
+
+        if conversation.title == "New Chat":
+            conversation.title = generate_chat_title(user_message)
+            conversation.save()
+
         return JsonResponse({
             'status': 'success',
             'thread_id': thread_id,
+            'conversation_title': conversation.title,
             'response': response
         })
 
@@ -137,18 +161,18 @@ def chat_api(request):
             'thread_id': thread_id,
         }, status=500)
 
-# Optional: Endpoint to get conversation history
+
 @login_required
 @require_http_methods(["GET"])
-def get_conversation_history(request, thread_id):
+def get_conversation_history(request, conversation_id):
     """Get the history of a specific conversation"""
     try:
-        chatbot = ChatBot()  # Using default config
-        messages = chatbot.storage.load_conversation(thread_id)
+        global chatbot  # Using default config
+        messages = chatbot.storage.load_conversation(conversation_id)
         
         return JsonResponse({
             'status': 'success',
-            'thread_id': thread_id,
+            'thread_id': conversation_id,
             'messages': [
                 {
                     'user_message': msg.user_message,
@@ -162,3 +186,6 @@ def get_conversation_history(request, thread_id):
         return JsonResponse({
             'error': f'Error fetching conversation history: {str(e)}'
         }, status=500)
+    
+
+

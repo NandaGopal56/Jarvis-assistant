@@ -1,15 +1,31 @@
 from django.urls import path
-from . import views
+from . import chat_views
+from . import search_views
 
 
 urlpatterns = [
-    path('', views.home_view, name='home'),
-    path('chat/', views.chat_view, name='chat_home'),
-    path('chat/new/', views.create_new_chat, name='new_chat'),
-    path('chat/<str:conversation_id>/', views.chat_view, name='chat_with_id'),
-    path('search/', views.search_with_llm_view, name='search_with_llm'),
-    path('api/chat/', views.chat_api, name='chat_api'),
+    path('', chat_views.home_view, name='home'),
+]
+
+# Chat with LLM
+urlpatterns += [
+
+    # views
+    path('chat/', chat_views.chat_home, name='chat_home'),
+    path('chat/<str:conversation_id>/', chat_views.chat_view, name='chat_with_id'),
+
+    # APIs
+    path('api/chat/new/', chat_views.create_new_chat, name='new_chat'),
+    path('api/chat/', chat_views.chat_api, name='chat_api'),
     path('api/conversation/<str:conversation_id>/', 
-         views.get_conversation_history, 
+         chat_views.get_conversation_history, 
          name='conversation_history'),
+]
+
+
+#  Search with LLM
+urlpatterns += [
+
+    # views
+    path('search/', search_views.search_with_llm_view, name='search_with_llm'),
 ]
