@@ -25,16 +25,53 @@ class State(MessagesState):
 
 class ChatBotWorkflowBuilder:
     """Builds the conversation workflow"""
-    def __init__(self, model):
+    def __init__(self, model, storage):
         self.model = model
         self.memory_saver = MemorySaver()
         self.workflow = None
+        self.storage = storage
+
+    def _memory_state_update(self, state: State) -> Dict[str, List[AIMessage]]:
+        """Update the memory state"""
+        print(f"state in memory_state_update: {state}\n")
+
+        last_human_message = state.get("messages")[-1]
+        print(f"last_human_message: {last_human_message}\n")
+        
+        thread_id = state.get("thread_id")
+            
+        # Fetch messages from storage
+        existing_messages = []
+        summary = ""
+        thread_history = self.storage.load_conversation(thread_id, limit=1)
+        if thread_history:
+            for msg_pair in thread_history:
+                if msg_pair.user_message:
+                    existing_messages.append(HumanMessage(content=msg_pair.user_message))
+                if msg_pair.ai_message:
+                    existing_messages.append(AIMessage(content=msg_pair.ai_message))
+                if msg_pair.summary:
+                    summary = msg_pair.summary
+
+
+        delete_messages = [RemoveMessage(id=m.id) for m in state["messages"]] \
+            + existing_messages \
+            + [HumanMessage(content=last_human_message.content)]
+        
+        new_state = {
+            "summary": "default summary",
+            "messages": delete_messages
+        }
+
+        print(f"new_state returned from memory_state_update: {new_state}\n")
+
+        print('-------------------------------------------------\n')
+        return new_state
 
     def _call_model(self, state: State) -> Dict[str, List[AIMessage]]:
         """Call the model with the current state"""
-        print(f"no of messages in state: {len(state['messages'])}")
-        print(f"messages in state: {state['messages']}")
-        print('-------------------------------------------------')
+        print(f"no of messages in state in call_model: {len(state['messages'])}\n")
+        print(f"messages in state in call_model: {state}\n")
 
         system_prompt = (
             "You are a helpful AI assistant. "
@@ -59,6 +96,9 @@ class ChatBotWorkflowBuilder:
 
         # Generate response
         response = self.model.generate_response(question)
+
+        print(f"response: {response}")
+        print('-------------------------------------------------')
         
         return {"messages": [response]}
 
@@ -92,16 +132,19 @@ class ChatBotWorkflowBuilder:
         response = self.model.generate_response(messages)
         
         delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-2]]
+        print(f"delete_messages: {delete_messages}")
         return {"summary": response.content, "messages": delete_messages}
 
     def build(self) -> StateGraph:
         """Create and return the workflow graph"""
         workflow = StateGraph(State)
         
+        workflow.add_node("memory_state_update", self._memory_state_update)
         workflow.add_node("conversation", self._call_model)
         workflow.add_node("summarize_conversation", self._summarize_conversation)
         
-        workflow.add_edge(START, "conversation")
+        workflow.add_edge(START, "memory_state_update")
+        workflow.add_edge("memory_state_update", "conversation")
         workflow.add_conditional_edges(
             "conversation",
             self._should_continue,
@@ -135,10 +178,13 @@ class BotBuilder:
         """Set up the workflow based on the provided type"""
         if not self.model:
             raise ValueError("Model must be initialized before creating workflow")
+
+        if not self.storage:
+            raise ValueError("Storage must be initialized before creating workflow")
             
         match workflow_type:
             case WorkflowType.CHATBOT:
-                workflow_builder = ChatBotWorkflowBuilder(self.model)
+                workflow_builder = ChatBotWorkflowBuilder(self.model, self.storage)
             case _:
                 raise ValueError(f"Unsupported workflow type: {workflow_type}")
         
@@ -194,23 +240,23 @@ class Bot:
             print('#####################################################################')
             
             # Fetch existing messages from storage
-            existing_messages = []
-            summary = ""
-            thread_history = self.storage.load_conversation(thread_id)
-            if thread_history:
-                for msg_pair in thread_history:
-                    if msg_pair.user_message:
-                        existing_messages.append(HumanMessage(content=msg_pair.user_message))
-                    if msg_pair.ai_message:
-                        existing_messages.append(AIMessage(content=msg_pair.ai_message))
-                    if msg_pair.summary:
-                        summary = msg_pair.summary
+            # existing_messages = []
+            # summary = ""
+            # thread_history = self.storage.load_conversation(thread_id)
+            # if thread_history:
+            #     for msg_pair in thread_history:
+            #         if msg_pair.user_message:
+            #             existing_messages.append(HumanMessage(content=msg_pair.user_message))
+            #         if msg_pair.ai_message:
+            #             existing_messages.append(AIMessage(content=msg_pair.ai_message))
+            #         if msg_pair.summary:
+            #             summary = msg_pair.summary
             
             input_message = HumanMessage(content=message)
-            all_messages = existing_messages + [input_message]
+            # all_messages = existing_messages + [input_message]
 
-            print(f"existing_messages: {existing_messages}")
-            print('-------------------------------------------------')
+            # print(f"existing_messages: {existing_messages}")
+            # print('-------------------------------------------------')
 
             config = {"configurable": {"thread_id": thread_id}}
             
@@ -228,7 +274,7 @@ class Bot:
             # print('-------------------------------------------------')
 
             response = self.workflow.invoke(
-                {"messages": [input_message]},
+                {"messages": [input_message], "thread_id": thread_id},
                 config=config
             )
             

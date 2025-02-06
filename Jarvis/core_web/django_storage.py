@@ -35,8 +35,15 @@ class ChatStorageInterface(ABC):
         pass
     
     @abstractmethod
-    def load_conversation(self, conversation_id: str) -> List[MessageData]:
-        """Load all messages from a conversation"""
+    def load_conversation(self, conversation_id: str, limit: Optional[int] = None) -> List[MessageData]:
+        """
+        Load messages from a conversation
+        Args:
+            conversation_id: The ID of the conversation
+            limit: Optional number of latest messages to return. If None, returns all messages.
+        Returns:
+            List of MessageData ordered by newest first
+        """
         pass
     
     @abstractmethod
@@ -78,13 +85,27 @@ class DjangoStorage(ChatStorageInterface):
         except ObjectDoesNotExist:
             return False
     
-    def load_conversation(self, conversation_id: str) -> List[MessageData]:
-        """Load all messages from a conversation"""
+    def load_conversation(self, conversation_id: str, limit: Optional[int] = None) -> List[MessageData]:
+        """
+        Load messages from a conversation
+        Args:
+            conversation_id: The ID of the conversation
+            limit: Optional number of latest messages to return. If None, returns all messages.
+        Returns:
+            List of MessageData ordered by newest first
+        """
         try:
             conversation = Conversation.objects.get(conversation_id=conversation_id)
             messages = []
             
-            for pair in conversation.message_pairs.all():
+            # Get message pairs ordered by creation time, newest first
+            message_pairs = conversation.message_pairs.all().order_by('-created_at')
+            
+            # Apply limit if specified
+            if limit is not None:
+                message_pairs = message_pairs[:limit]
+            
+            for pair in message_pairs:
                 messages.append(MessageData(
                     user_message=pair.user_message,
                     ai_message=pair.ai_message,
@@ -96,7 +117,9 @@ class DjangoStorage(ChatStorageInterface):
                     error_message=pair.error_message
                 ))
             
-            return messages
+            # Reverse the list to maintain chronological order (oldest to newest)
+            return list(reversed(messages))
+            
         except ObjectDoesNotExist:
             return []
     
@@ -135,9 +158,16 @@ class StorageManager:
         """Save a message pair to the conversation"""
         return self.storage.save_message(conversation_id, message_data)
     
-    def load_conversation(self, conversation_id: str) -> List[MessageData]:
-        """Load all messages from a conversation"""
-        return self.storage.load_conversation(conversation_id)
+    def load_conversation(self, conversation_id: str, limit: Optional[int] = None) -> List[MessageData]:
+        """
+        Load messages from a conversation
+        Args:
+            conversation_id: The ID of the conversation
+            limit: Optional number of latest messages to return. If None, returns all messages.
+        Returns:
+            List of MessageData ordered by newest first
+        """
+        return self.storage.load_conversation(conversation_id, limit)
     
     def get_user_conversations(self, user_id: int) -> List[Dict]:
         """Get all conversations for a user"""
