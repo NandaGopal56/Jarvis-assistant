@@ -66,6 +66,17 @@ Jarvis supports the following language models:
 
 Contributions are welcome! Please open an issue or contribute to the repository using GitHub's pull request feature.
 
-## License
+## Environment Variables
 
-MIT License
+Before running the application, create a `.env` file in the root directory based on `.env.example` and fill in the necessary environment variables.  
+
+### Steps to Set Up the `.env` File:
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Open the `.env` file in a text editor and fill in the required variables.
+
+3. Save the file and close the text editor.
