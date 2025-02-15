@@ -25,7 +25,7 @@ class LanguageModel(ABC):
         pass
     
     @abstractmethod
-    def generate_response(self, messages: List[Tuple[str, str]]) -> str:
+    async def generate_response(self, messages: List[Tuple[str, str]]) -> str:
         """Generate response from the language model."""
         pass
 
@@ -46,8 +46,8 @@ class GroqLanguageModel(LanguageModel):
                 f"Supported models: {', '.join(supported_models)}"
             )
     
-    def generate_response(self, messages: List[Tuple[str, str]]) -> str:
-        return self._model.invoke(input=messages)
+    async def generate_response(self, messages: List[Tuple[str, str]]) -> str:
+        return await self._model.ainvoke(input=messages)
 
 
 
@@ -55,7 +55,7 @@ class LanguageModelFactory:
     """Factory class to create language model instances."""
     
     @staticmethod
-    def create_model(provider: str, model_name: BaseModelName) -> LanguageModel:
+    async def create_model(provider: str, model_name: BaseModelName) -> LanguageModel:
         """Create a language model instance for the specified provider.
         
         Args:
@@ -71,18 +71,24 @@ class LanguageModelFactory:
         
         raise ValueError(f"Unsupported provider: {provider}. Supported providers: [{ModelProvider.get_provider_names()}]")
 
+
 # Example usage
-if __name__ == "__main__":
+async def main():
     # Create language model instance
-    model = LanguageModelFactory.create_model(
+    model = await LanguageModelFactory.create_model(
         provider=ModelProvider.GROQ,
         model_name=GroqModelName.LLAMA_3_2_1B
     )
     
     messages = [
-        ("system", "You are a helpful assistant that knows about indian history. Answer the question under 10 words."),
-        ("human", "When did india get its independence?")
+        ("system", "You are a helpful assistant that knows about Indian history. Answer the question under 10 words."),
+        ("human", "When did India get its independence?")
     ]
     
-    response = model.generate_response(messages)
-    print(f"Response: {response.content}\n")
+    response = await model.generate_response(messages)
+    print(f"Response: {response}\n")
+
+# Run the example
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())

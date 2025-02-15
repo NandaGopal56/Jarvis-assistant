@@ -19,7 +19,7 @@
   :class="{'translate-x-0': open, '-translate-x-full': !open}"
   class="fixed md:static md:translate-x-0 left-0 top-0 h-full w-64 bg-black p-4 border-r border-gray-800 flex-shrink-0 overflow-hidden transition-transform duration-300 ease-in-out z-40"
 >
-  <form action="{% url 'chat_home' %}" method="POST" class="mb-4">
+  <form action="{% url 'home' %}" method="POST" class="mb-4">
     {% csrf_token %}
     <button
       type="submit"
@@ -67,21 +67,14 @@
     </button>
   </div>
 
-  <nav class="space-y-2 overflow-y-auto max-h-[calc(100vh-120px)]">
-    {% for conversation in conversations %}
-    <a
-      id="thread-title-{{ conversation.conversation_id }}"
-      href="{% url 'chat_with_id' conversation_id=conversation.conversation_id %}"
-      class="block px-4 py-2 rounded-lg hover:bg-gray-800 text-sm md:text-base border-b border-gray-700 truncate"
-    >
-      {{ conversation.title|default:"New Chat" }}
-      <div class="text-xs text-gray-400">
-        {{ conversation.updated_at|date:"M d, Y" }}
-      </div>
-    </a>
-    {% empty %}
-    <div class="text-gray-500 text-sm text-center">No conversations yet</div>
-    {% endfor %}
+  <nav
+    class="space-y-2 overflow-y-auto max-h-[calc(100vh-120px)]"
+    id="conversation-list"
+  >
+    <!-- Conversations will be dynamically added here -->
+    <div class="text-gray-500 text-sm text-center">
+      Loading conversations...
+    </div>
   </nav>
 </div>
 
@@ -181,4 +174,71 @@
       console.error("Error starting new chat:", error);
     }
   }
+
+  async function loadConversations(threadId) {
+    try {
+      const response = await fetch(`/api/conversations/${threadId}/`); // Adjust the URL as needed
+      if (!response.ok) throw new Error("Failed to load conversations");
+
+      const data = await response.json();
+      const conversationList = document.getElementById("conversation-list");
+
+      // Clear existing conversations
+      conversationList.innerHTML = "";
+
+      // Render conversations
+      data.conversations.forEach((conv) => {
+        const listItem = document.createElement("a");
+        listItem.id = `thread-title-${conv.id}`;
+        listItem.href = `/chat/${conv.id}/`; // Adjust the URL to match your routing
+        listItem.className =
+          "block px-4 py-2 rounded-lg hover:bg-gray-800 text-sm md:text-base border-b border-gray-700 truncate";
+        listItem.innerHTML = `
+          ${conv.title || "New Chat"}
+          <div class="text-xs text-gray-400">
+            ${new Date(conv.updated_at).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </div>
+        `;
+        conversationList.appendChild(listItem);
+      });
+
+      // If no conversations, show a message
+      if (data.conversations.length === 0) {
+        conversationList.innerHTML =
+          '<div class="text-gray-500 text-sm text-center">No conversations yet</div>';
+      }
+    } catch (error) {
+      console.error("Error loading conversations:", error);
+      document.getElementById("conversation-list").innerHTML =
+        '<div class="text-gray-500 text-sm text-center">Error loading conversations</div>';
+    }
+  }
+
+  // Call loadConversations when the page loads
+  document.addEventListener("DOMContentLoaded", function () {
+    const threadId = getThreadIdFromUrl(); // Assuming this function is defined elsewhere
+    loadConversations(threadId);
+  });
 </script>
+
+<style>
+  /* Ensure the sidebar is scrollable and hide the scrollbar */
+  #conversation-list {
+    max-height: calc(100vh - 120px); /* Adjust this value as needed */
+    overflow-y: auto; /* Enable vertical scrolling */
+  }
+
+  /* Hide scrollbar for WebKit browsers (Chrome, Safari) */
+  #conversation-list::-webkit-scrollbar {
+    display: none; /* Hide scrollbar */
+  }
+
+  /* Hide scrollbar for Firefox */
+  #conversation-list {
+    scrollbar-width: none; /* Hide scrollbar */
+  }
+</style>

@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
+from asgiref.sync import sync_to_async
 from core_web.models import Conversation, MessagePair
 from typing import List, Dict
 from abc import ABC, abstractmethod
@@ -25,17 +26,17 @@ class ChatStorageInterface(ABC):
     """Abstract interface for chat storage operations"""
     
     @abstractmethod
-    def create_conversation(self, user_id: int, title: str = "") -> str:
+    async def create_conversation(self, user_id: int, title: str = "") -> str:
         """Create a new conversation and return its ID"""
         pass
     
     @abstractmethod
-    def save_message(self, conversation_id: str, message_data: MessageData) -> bool:
+    async def save_message(self, conversation_id: str, message_data: MessageData) -> bool:
         """Save a message pair to the conversation"""
         pass
     
     @abstractmethod
-    def load_conversation(self, conversation_id: str, limit: Optional[int] = None) -> List[MessageData]:
+    async def load_conversation(self, conversation_id: str, limit: Optional[int] = None) -> List[MessageData]:
         """
         Load messages from a conversation
         Args:
@@ -47,30 +48,30 @@ class ChatStorageInterface(ABC):
         pass
     
     @abstractmethod
-    def get_user_conversations(self, user_id: int) -> List[Dict]:
+    async def get_user_conversations(self, user_id: int) -> List[Dict]:
         """Get all conversations for a user"""
         pass
 
 class DjangoStorage(ChatStorageInterface):
     """Django implementation of chat storage"""
     
-    def create_conversation(self, user_id: int, title: str = "") -> str:
+    async def create_conversation(self, user_id: int, title: str = "") -> str:
         """Create a new conversation and return its ID"""
         User = get_user_model()
-        user = User.objects.get(id=user_id)
-        conversation = Conversation.objects.create(
+        user = await User.objects.aget(id=user_id)
+        conversation = await sync_to_async(Conversation.objects.create)(
             user=user,
             title=title
         )
         return str(conversation.conversation_id)
-    
-    def save_message(self, conversation_id: str, message_data: MessageData) -> bool:
+
+    async def save_message(self, conversation_id: str, message_data: MessageData) -> bool:
         """Save a message pair to the conversation"""
         try:
-            conversation = Conversation.objects.get(conversation_id=conversation_id)
+            conversation = await Conversation.objects.aget(conversation_id=conversation_id)
             
             # Create message pair
-            message_pair = MessagePair.objects.create(
+            await sync_to_async(MessagePair.objects.create)(
                 conversation=conversation,
                 user_message=message_data.user_message,
                 ai_message=message_data.ai_message,
@@ -85,7 +86,7 @@ class DjangoStorage(ChatStorageInterface):
         except ObjectDoesNotExist:
             return False
     
-    def load_conversation(self, conversation_id: str, limit: Optional[int] = None) -> List[MessageData]:
+    async def load_conversation(self, conversation_id: str, limit: Optional[int] = None) -> List[MessageData]:
         """
         Load messages from a conversation
         Args:
@@ -95,16 +96,16 @@ class DjangoStorage(ChatStorageInterface):
             List of MessageData ordered by newest first
         """
         try:
-            conversation = Conversation.objects.get(conversation_id=conversation_id)
+            conversation = await Conversation.objects.aget(conversation_id=conversation_id)
             messages = []
-            
+
             # Get message pairs ordered by creation time, newest first
-            message_pairs = conversation.message_pairs.all().order_by('-created_at')
-            
+            message_pairs = await sync_to_async(list)(conversation.message_pairs.all().order_by('-created_at'))
+
             # Apply limit if specified
             if limit is not None:
                 message_pairs = message_pairs[:limit]
-            
+
             for pair in message_pairs:
                 messages.append(MessageData(
                     user_message=pair.user_message,
@@ -116,27 +117,27 @@ class DjangoStorage(ChatStorageInterface):
                     processing_time=pair.processing_time,
                     error_message=pair.error_message
                 ))
-            
+
             # Reverse the list to maintain chronological order (oldest to newest)
             return list(reversed(messages))
-            
+
         except ObjectDoesNotExist:
             return []
-    
-    def get_user_conversations(self, user_id: int) -> List[Dict]:
+        
+    async def get_user_conversations(self, user_id: int) -> List[Dict]:
         """Get all conversations for a user"""
         User = get_user_model()
         try:
-            user = User.objects.get(id=user_id)
+            user = await User.objects.aget(id=user_id)
             return [
                 {
                     'id': str(conv.id),
                     'title': conv.title or 'Untitled',
                     'created_at': conv.created_at,
                     'updated_at': conv.updated_at,
-                    'message_count': conv.message_pairs.count()
+                    'message_count': await conv.message_pairs.count()
                 }
-                for conv in user.conversations.all()
+                for conv in await user.conversations.all()
             ]
         except ObjectDoesNotExist:
             return []
@@ -150,15 +151,15 @@ class StorageManager:
         else:
             raise ValueError(f"Unsupported storage type: {storage_type}")
     
-    def create_conversation(self, user_id: int, title: str = "") -> str:
+    async def create_conversation(self, user_id: int, title: str = "") -> str:
         """Create a new conversation"""
-        return self.storage.create_conversation(user_id, title)
+        return await self.storage.create_conversation(user_id, title)
     
-    def save_message(self, conversation_id: str, message_data: MessageData) -> bool:
+    async def save_message(self, conversation_id: str, message_data: MessageData) -> bool:
         """Save a message pair to the conversation"""
-        return self.storage.save_message(conversation_id, message_data)
+        return await self.storage.save_message(conversation_id, message_data)
     
-    def load_conversation(self, conversation_id: str, limit: Optional[int] = None) -> List[MessageData]:
+    async def load_conversation(self, conversation_id: str, limit: Optional[int] = None) -> List[MessageData]:
         """
         Load messages from a conversation
         Args:
@@ -167,9 +168,9 @@ class StorageManager:
         Returns:
             List of MessageData ordered by newest first
         """
-        return self.storage.load_conversation(conversation_id, limit)
+        return await self.storage.load_conversation(conversation_id, limit)
     
-    def get_user_conversations(self, user_id: int) -> List[Dict]:
+    async def get_user_conversations(self, user_id: int) -> List[Dict]:
         """Get all conversations for a user"""
-        return self.storage.get_user_conversations(user_id)
+        return await self.storage.get_user_conversations(user_id)
     

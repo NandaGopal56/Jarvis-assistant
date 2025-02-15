@@ -3,7 +3,7 @@ from src.configs import ModelProvider, GroqModelName
 from langchain_core.messages import HumanMessage
 
 
-def generate_chat_title(user_message: str) -> str:
+async def generate_chat_title(user_message: str) -> str:
     """
     Generate a title for the conversation based on the user's message.
     
@@ -20,11 +20,13 @@ def generate_chat_title(user_message: str) -> str:
         Exception: If the language model fails to generate a response.
 
     Examples:
-        >>> generate_chat_title("Hello, how are you?")
+        >>> await generate_chat_title("Hello, how are you?")
         'Hello World'
     """
+
+    
     # Create a language model instance
-    model = LanguageModelFactory.create_model(
+    model = await LanguageModelFactory.create_model(
         provider=ModelProvider.GROQ,
         model_name=GroqModelName.LLAMA_3_2_1B
     )
@@ -33,7 +35,7 @@ def generate_chat_title(user_message: str) -> str:
     user_input = HumanMessage(content=f"Generate one title based on the following message from a user in 3 to 5 words max: \n{user_message}")
 
     # Generate a response from the model
-    ai_response = model.generate_response([user_input])
+    ai_response = await model.generate_response([user_input])
 
     # Extract and process the response content
     title = ai_response.content.strip().replace('"', '') if ai_response.content else "New Chat"

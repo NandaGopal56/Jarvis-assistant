@@ -5,14 +5,15 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_protect
-from src.llm_manager import GroqModelName
-from core_web.django_storage import ChatStorageType
-from rest_framework.decorators import api_view
-from src.chat import BotBuilder
-from src.configs import WorkflowType, ModelProvider
-from core_web.models import Conversation, AIChatMessageStatus
+from asgiref.sync import sync_to_async
+from django.conf import settings
+from core_web.models import Conversation
 from core_web.services.chat_service import ChatService
+from src.llm_manager import GroqModelName
+from src.configs import ModelProvider
 from src.utils import generate_chat_title
+from core_web.services.chat_service import get_chatbot_instance
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -20,50 +21,67 @@ logger = logging.getLogger(__name__)
 def home_view(request):
     return render(request, 'home.html')
 
+@login_required
+async def chat_home(request, conversation_id=None):
+
+
+    if conversation_id is None:
+        # Get or create an empty conversation
+        conversation, message = await ChatService.create_or_get_empty_chat(request.user)
+        conversation_id = conversation.conversation_id  
+        return redirect('chat_with_id', conversation_id)
+
+    return render(request, 'chat.html', {'conversation_id': conversation_id})
+    
+
 
 @login_required
-def chat_home(request):
-
-    # Get or create an empty conversation
-    conversation, message = ChatService.create_or_get_empty_chat(request.user)
-
-    # Redirect to the chat view with the empty conversation ID
-    return redirect('chat_with_id', conversation.conversation_id)
-
-# Chat with LLM
-@login_required
-def chat_view(request, conversation_id):
+async def get_conversations(request, conversation_id):
     """
-    Single view to handle both new chats and existing conversations
+    API endpoint to get all conversations and the current conversation.
     """
-    # Get all conversations for the sidebar
-    conversations = Conversation.objects.filter(user=request.user).order_by('-updated_at')
-    
-    current_conversation_set = conversations.filter(conversation_id=conversation_id)
-    if current_conversation_set:
-        current_conversation = current_conversation_set[0]
-    else:
-        current_conversation = None
-        
-    # If invalid conversation_id, redirect to main chat page
-    if not current_conversation:
-        return redirect('chat_home')
-    
-    return render(request, 'chat.html', {
-        'conversations': conversations,
-        'current_conversation': current_conversation
-    })
+    # Accessing request.user in an async context requires sync_to_async
+    user = await sync_to_async(lambda: request.user, thread_sensitive=True)()
+
+    # Fetch all conversations asynchronously
+    conversations = await sync_to_async(
+        lambda: list(Conversation.objects.filter(user=user).order_by('-updated_at')),
+        thread_sensitive=True
+    )()
+
+    # Fetch the current conversation asynchronously
+    current_conversation = await sync_to_async(
+        lambda: Conversation.objects.filter(user=user, conversation_id=conversation_id).order_by('-updated_at').first(),
+        thread_sensitive=True
+    )()
+
+    # Prepare the response data
+    response_data = {
+        'conversations': [
+            {
+                'id': str(conv.conversation_id),
+                'title': conv.title,
+                'updated_at': conv.updated_at,
+            } for conv in conversations
+        ],
+        'current_conversation': {
+            'id': str(current_conversation.conversation_id) if current_conversation else None,
+            'title': current_conversation.title if current_conversation else None,
+        }
+    }
+
+    return JsonResponse(response_data)
 
 @login_required
 @csrf_protect
 @require_http_methods(["POST"])
-def create_new_chat(request):
+async def create_new_chat(request):
     """
     API endpoint that creates a new conversation or returns existing empty conversation.
     Returns JSON with conversation ID and redirect URL.
     """
     try:
-        conversation, message = ChatService.create_or_get_empty_chat(request.user)
+        conversation, message = await ChatService.create_or_get_empty_chat(request.user)
         
         return JsonResponse({
             'status': 'success',
@@ -78,19 +96,10 @@ def create_new_chat(request):
             'message': str(e)
         }, status=500)
 
-
-# Initialize chatbot with config
-chatbot = BotBuilder() \
-            .with_model(provider=ModelProvider.GROQ, model_name=GroqModelName.LLAMA_3_3_70B) \
-            .with_storage(storage_type = ChatStorageType.DJANGO) \
-            .with_workflow(workflow_type = WorkflowType.CHATBOT) \
-            .with_temperature(0.0) \
-            .build()
-
     
 @csrf_protect
 @require_http_methods(["POST"])
-def chat_api(request):
+async def chat_api(request):
     """
     API endpoint to handle chat interactions
     
@@ -123,22 +132,41 @@ def chat_api(request):
                 'error': 'thread_id field is missing in the request body'
             }, status=400)
             
-        
         user_message = data['message']
         thread_id = data['thread_id']
 
         print(f"Received message: {user_message} with thread_id: {thread_id}")
 
-        global chatbot
+        # Extract model configuration if provided, else use defaults
+        model_config = data.get("model_config", {})
+        temperature = model_config.get("temperature", 0.0)
+        model_provider = ModelProvider(model_config.get("model_provider", ModelProvider.GROQ.value))
+        model_name_str = model_config.get("model_name", GroqModelName.LLAMA_3_3_70B.value)
+
+        # Get the corresponding model Enum class
+        ModelEnum = model_provider.get_model_enum()
+
+        # Validate and select the correct model or raise an error
+        if model_name_str not in ModelEnum.get_model_names():
+            return JsonResponse({
+                'error': f"Invalid model name '{model_name_str}' for provider '{model_provider.value}'. ",
+                'message': f"Available models: {ModelEnum.get_model_names()}"
+            }, status=400)
+        
+        # Assign the validated model name
+        model_name = ModelEnum(model_name_str)
+
+        # Retrieve or create chatbot instance
+        chatbot = await get_chatbot_instance(model_provider, model_name, temperature)  # Changed to await
 
         # Get response from chatbot
-        response = chatbot.chat(user_message, thread_id)
+        response = await chatbot.chat(user_message, thread_id)  # Changed to await
 
-        conversation = Conversation.objects.get(conversation_id=thread_id)
+        conversation = await Conversation.objects.aget(conversation_id=thread_id)  # Changed to await
 
         if conversation.title == "New Chat":
-            conversation.title = generate_chat_title(user_message)
-            conversation.save()
+            conversation.title = await generate_chat_title(user_message)
+            await conversation.asave()  # Changed to await
 
         return JsonResponse({
             'status': 'success',
@@ -155,7 +183,7 @@ def chat_api(request):
         }, status=400)
     
     except Exception as e:
-        logger.error(f"Error processing chat request: {str(e)}")
+        logger.error(f"Error processing chat request: {str(e)}\n{traceback.format_exc()}")
         return JsonResponse({
             'error': f'Error processing request: {str(e)}',
             'thread_id': thread_id,
@@ -164,11 +192,17 @@ def chat_api(request):
 
 @login_required
 @require_http_methods(["GET"])
-def get_conversation_history(request, conversation_id):
+async def get_conversation_history(request, conversation_id):
     """Get the history of a specific conversation"""
     try:
-        global chatbot  # Using default config
-        messages = chatbot.storage.load_conversation(conversation_id)
+
+        # Retrieve or create chatbot instance
+        temperature = 0.0
+        model_provider = ModelProvider.GROQ
+        model_name = GroqModelName.LLAMA_3_3_70B
+        chatbot = await get_chatbot_instance(model_provider, model_name, temperature)
+
+        messages = await chatbot.storage.load_conversation(conversation_id)
         
         return JsonResponse({
             'status': 'success',
@@ -182,7 +216,7 @@ def get_conversation_history(request, conversation_id):
             ]
         })
     except Exception as e:
-        logger.error(f"Error fetching conversation history: {str(e)}")
+        logger.error(f"Error fetching conversation history: {str(e)}\n{traceback.format_exc()}")
         return JsonResponse({
             'error': f'Error fetching conversation history: {str(e)}'
         }, status=500)

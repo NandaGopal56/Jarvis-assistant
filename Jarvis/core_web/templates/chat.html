@@ -257,186 +257,34 @@
 
     <script>
       document.addEventListener("DOMContentLoaded", function () {
-        // Initialize highlight.js with a try-catch block
+        // Initialize highlight.js with configuration
+        initializeHighlightJS();
+
+        // Set marked.js options for parsing markdown
+        setMarkedOptions();
+
+        // Attach event listeners
+        attachEventListeners();
+
+        // Load initial conversation if thread ID is available
+        const threadId = getThreadIdFromUrl();
+        if (threadId) {
+          loadConversation(threadId);
+        }
+      });
+
+      // Initializes highlight.js with necessary configurations
+      function initializeHighlightJS() {
         try {
-          hljs.configure({
-            ignoreUnescapedHTML: true,
-          });
+          hljs.configure({ ignoreUnescapedHTML: true });
           hljs.highlightAll();
         } catch (e) {
           console.error("Error initializing highlight.js:", e);
         }
+      }
 
-        function createMessageElement(content, isUser = false) {
-          try {
-            // Parse code blocks with file paths
-            const codeBlockRegex = /```(\w+):([^\n]+)\n([\s\S]*?)```/g;
-            let formattedContent = content;
-
-            if (!isUser) {
-              // Replace code blocks with custom file blocks
-              formattedContent = content.replace(
-                codeBlockRegex,
-                (match, lang, path, code) => {
-                  const highlightedCode = hljs.highlight(code.trim(), {
-                    language: lang,
-                  }).value;
-                  return `<div class="file-block">
-                                            <div class="file-header">${path}</div>
-                                            <pre><code class="language-${lang}">${highlightedCode}</code></pre>
-                                        </div>`;
-                }
-              );
-
-              // Parse the remaining content with marked
-              formattedContent = marked.parse(formattedContent);
-
-              // Create a temporary div to hold the content
-              const tempDiv = document.createElement("div");
-              tempDiv.innerHTML = formattedContent;
-
-              // Find all remaining code blocks and highlight them
-              tempDiv.querySelectorAll("pre code").forEach((block) => {
-                hljs.highlightElement(block);
-              });
-
-              formattedContent = tempDiv.innerHTML;
-            }
-
-            return `
-                            <div class="flex items-start ${
-                              isUser ? "justify-end" : ""
-                            } space-x-4">
-                                ${
-                                  !isUser
-                                    ? `
-                                <div class="bg-blue-600 p-3 rounded-full flex-shrink-0">
-                                    <svg class="text-white w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none"
-                                        viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                            d="M8 16l-4-4m0 0l4-4m-4 4h16M16 4h4v16h-4" />
-                                    </svg>
-                                </div>
-                                `
-                                    : ""
-                                }
-                                <div class="bg-gray-800 p-4 rounded-lg max-w-full md:max-w-3xl">
-                                    <div class="message-content">${
-                                      isUser ? content : formattedContent
-                                    }</div>
-                                </div>
-                                ${
-                                  isUser
-                                    ? `
-                                <div class="bg-blue-600 p-3 rounded-full flex-shrink-0">
-                                    <svg class="text-white w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none"
-                                        viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                            d="M20 12H4m0 0l4-4m-4 4l4 4" />
-                                    </svg>
-                                </div>
-                                `
-                                    : ""
-                                }
-                            </div>`;
-          } catch (e) {
-            console.error("Error creating message element:", e);
-            return `<div class="error">Error processing message</div>`;
-          }
-        }
-
-        document
-          .getElementById("chat-form")
-          .addEventListener("submit", async function (e) {
-            e.preventDefault();
-            const userInput = document.getElementById("user-input");
-            const message = userInput.value.trim();
-            const chatContainer = document.getElementById("chat-container");
-
-            if (message) {
-              // Disable input and button while processing
-              userInput.disabled = true;
-              const submitButton = this.querySelector('button[type="submit"]');
-              submitButton.disabled = true;
-
-              try {
-                // Add user message to chat
-                chatContainer.insertAdjacentHTML(
-                  "beforeend",
-                  createMessageElement(message, true)
-                );
-                userInput.value = "";
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                // Call API
-                const response = await fetch("/api/chat/", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": getCookie("csrftoken"), // Make sure to implement getCookie
-                  },
-                  body: JSON.stringify({
-                    message: message,
-                    thread_id: window.location.pathname.split("/")[2],
-                  }),
-                });
-
-                if (!response.ok) {
-                  throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                // Add AI response to chat
-                chatContainer.insertAdjacentHTML(
-                  "beforeend",
-                  createMessageElement(data.response)
-                );
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                // Add this after inserting new messages
-                hljs.highlightAll();
-
-                //update the conversation title from the response
-                const conversationTitle = document.getElementById(`thread-title-${data.thread_id}`);
-                conversationTitle.textContent = data.conversation_title;
-              } catch (error) {
-                console.error("Error:", error);
-                // Show error message in chat
-                chatContainer.insertAdjacentHTML(
-                  "beforeend",
-                  createMessageElement(
-                    "Sorry, there was an error processing your request. Please try again."
-                  )
-                );
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-
-              } finally {
-                // Re-enable input and button
-                userInput.disabled = false;
-                submitButton.disabled = false;
-                userInput.focus();
-              }
-            }
-          });
-
-        const textarea = document.getElementById("user-input");
-        textarea.addEventListener("input", function () {
-          this.style.height = "auto";
-          this.style.height = Math.min(this.scrollHeight, 160) + "px";
-        });
-
-        // Add support for Shift+Enter for new lines, Enter to submit
-        textarea.addEventListener("keydown", function (e) {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            document
-              .getElementById("chat-form")
-              .dispatchEvent(new Event("submit"));
-          }
-        });
-
-        // Update marked configuration
+      // Sets options for marked.js for markdown parsing and highlighting code blocks
+      function setMarkedOptions() {
         marked.setOptions({
           highlight: function (code, lang) {
             try {
@@ -452,79 +300,238 @@
           breaks: true,
           gfm: true,
         });
+      }
 
-        async function loadConversation(threadId) {
+      // Attaches necessary event listeners to form, textarea, and other elements
+      function attachEventListeners() {
+        const form = document.getElementById("chat-form");
+        form.addEventListener("submit", handleFormSubmit);
+
+        const textarea = document.getElementById("user-input");
+        textarea.addEventListener("input", adjustTextareaHeight);
+        textarea.addEventListener("keydown", handleTextareaKeydown);
+      }
+
+      // Handles form submission
+      async function handleFormSubmit(event) {
+        event.preventDefault();
+        const userInput = document.getElementById("user-input");
+        const message = userInput.value.trim();
+        const chatContainer = document.getElementById("chat-container");
+
+        if (message) {
+          // Disable input and button while processing
+          toggleFormState(true);
+
+          // Clear the input box
+            userInput.value = "";
+
           try {
-            const response = await fetch(`/api/conversation/${threadId}/`);
-            if (!response.ok) throw new Error("Failed to load conversation");
+            // Add user message to chat
+            appendMessageToChat(message, true);
 
-            const data = await response.json();
-            const chatContainer = document.getElementById("chat-container");
+            // Call API to get AI response
+            const response = await fetchChatResponse(message);
+            if (response) {
+              const data = await response.json();
 
-            // Clear existing messages
-            chatContainer.innerHTML = "";
+              // Add AI response to chat
+              appendMessageToChat(data.response, false);
 
-            // Render initial conversation if it exists
-            if (window.current_conversation) {
-              window.current_conversation.forEach((messagePair) => {
-                if (messagePair.user_message) {
-                  chatContainer.insertAdjacentHTML(
-                    "beforeend",
-                    createMessageElement(messagePair.user_message, true)
-                  );
-                }
-                if (messagePair.ai_message) {
-                  chatContainer.insertAdjacentHTML(
-                    "beforeend",
-                    createMessageElement(messagePair.ai_message, false)
-                  );
-                }
-              });
-            }
-
-            // Add new messages from the API response
-            data.messages.forEach((msg) => {
-              if (msg.user_message) {
-                chatContainer.insertAdjacentHTML(
-                  "beforeend",
-                  createMessageElement(msg.user_message, true)
-                );
-              }
-              if (msg.ai_message) {
-                chatContainer.insertAdjacentHTML(
-                  "beforeend",
-                  createMessageElement(msg.ai_message, false)
-                );
-              }
-            });
-
-            // Update current thread ID
-            currentThreadId = threadId;
-
-            // Scroll to bottom
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            // Highlight code blocks in loaded messages
-            hljs.highlightAll();
-
-            // Close mobile sidebar after selection
-            if (window.innerWidth < 768) {
-              const sidebar = document.querySelector("[x-data]");
-              if (sidebar && sidebar.__x) {
-                sidebar.__x.$data.open = false;
-              }
+              // Update conversation title
+              updateConversationTitle(data.thread_id, data.conversation_title);
             }
           } catch (error) {
-            console.error("Error loading conversation:", error);
+            console.error("Error:", error);
+            appendMessageToChat(
+              "Sorry, there was an error processing your request. Please try again."
+            );
+          } finally {
+            // Re-enable input and button
+            toggleFormState(false);
           }
         }
+      }
 
-        // Load initial conversation if we're on a chat page
-        const threadId = window.location.pathname.split("/")[2];
-        if (threadId) {
-          loadConversation(threadId);
+      // Toggles the disabled state of the form input and submit button
+      function toggleFormState(isDisabled) {
+        const userInput = document.getElementById("user-input");
+        const submitButton = document.querySelector('button[type="submit"]');
+        userInput.disabled = isDisabled;
+        submitButton.disabled = isDisabled;
+        if (!isDisabled) userInput.focus();
+      }
+
+      // Fetches the chat response from the server
+      async function fetchChatResponse(message) {
+        try {
+          const response = await fetch("/api/chat/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCookie("csrftoken"), // Ensure getCookie is implemented
+            },
+            body: JSON.stringify({
+              message: message,
+              thread_id: getThreadIdFromUrl(),
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          return response;
+        } catch (error) {
+          console.error("Error during API call:", error);
+          return null;
         }
-      });
+      }
+
+      // Updates the conversation title in the UI
+      function updateConversationTitle(threadId, title) {
+        const conversationTitle = document.getElementById(
+          `thread-title-${threadId}`
+        );
+        if (conversationTitle) {
+          conversationTitle.textContent = title;
+        }
+      }
+
+      // Appends a message to the chat container
+      function appendMessageToChat(content, isUser = false) {
+        const chatContainer = document.getElementById("chat-container");
+        const messageElement = createMessageElement(content, isUser);
+        chatContainer.insertAdjacentHTML("beforeend", messageElement);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        // Highlight any code blocks
+        hljs.highlightAll();
+      }
+
+      // Creates a message element (with markdown/HTML rendering and code highlighting)
+      function createMessageElement(content, isUser = false) {
+        try {
+          let formattedContent = content;
+          if (!isUser) {
+            // Parse code blocks and format message for AI
+            formattedContent = formatCodeBlocks(formattedContent);
+            formattedContent = marked.parse(formattedContent);
+
+            // Highlight any remaining code blocks in the parsed message
+            const tempDiv = document.createElement("div");
+            tempDiv.innerHTML = formattedContent;
+            tempDiv.querySelectorAll("pre code").forEach(hljs.highlightElement);
+            formattedContent = tempDiv.innerHTML;
+          }
+
+          return `
+            <div class="flex items-start ${
+              isUser ? "justify-end" : ""
+            } space-x-4">
+                ${!isUser ? getBotIconHTML() : ""}
+                <div class="bg-gray-800 p-4 rounded-lg max-w-full md:max-w-3xl">
+                    <div class="message-content">${
+                      isUser ? content : formattedContent
+                    }</div>
+                </div>
+                ${isUser ? getUserIconHTML() : ""}
+            </div>`;
+        } catch (e) {
+          console.error("Error creating message element:", e);
+          return `<div class="error">Error processing message</div>`;
+        }
+      }
+
+      // Formats the code blocks in the message content (file paths and code highlighting)
+      function formatCodeBlocks(content) {
+        const codeBlockRegex = /```(\w+):([^\n]+)\n([\s\S]*?)```/g;
+        return content.replace(codeBlockRegex, (match, lang, path, code) => {
+          const highlightedCode = hljs.highlight(code.trim(), {
+            language: lang,
+          }).value;
+          return `<div class="file-block">
+                    <div class="file-header">${path}</div>
+                    <pre><code class="language-${lang}">${highlightedCode}</code></pre>
+                </div>`;
+        });
+      }
+
+      // Returns the HTML for the bot's icon
+      function getBotIconHTML() {
+        return `
+        <div class="bg-blue-600 p-3 rounded-full flex-shrink-0">
+            <svg class="text-white w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16l-4-4m0 0l4-4m-4 4h16M16 4h4v16h-4" />
+            </svg>
+        </div>`;
+      }
+
+      // Returns the HTML for the user's icon
+      function getUserIconHTML() {
+        return `
+        <div class="bg-blue-600 p-3 rounded-full flex-shrink-0">
+            <svg class="text-white w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4m0 0l4-4m-4 4l4 4" />
+            </svg>
+        </div>`;
+      }
+
+      // Adjusts the height of the textarea dynamically based on its content
+      function adjustTextareaHeight() {
+        const textarea = document.getElementById("user-input");
+        textarea.style.height = "auto";
+        textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px";
+      }
+
+      // Handles the keyboard events for the textarea (Shift+Enter for newline, Enter for submit)
+      function handleTextareaKeydown(e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          document
+            .getElementById("chat-form")
+            .dispatchEvent(new Event("submit"));
+        }
+      }
+
+      // Extracts the thread ID from the URL
+      function getThreadIdFromUrl() {
+        return window.location.pathname.split("/")[2];
+      }
+
+      // Loads the conversation for a specific thread ID from the API
+      async function loadConversation(threadId) {
+        try {
+          const response = await fetch(`/api/conversation/${threadId}/`);
+          if (!response.ok) throw new Error("Failed to load conversation");
+
+          const data = await response.json();
+          const chatContainer = document.getElementById("chat-container");
+
+          // Clear existing messages
+          chatContainer.innerHTML = "";
+
+          // Render initial conversation if it exists
+          if (data.messages) {
+            data.messages.forEach((msg) => {
+              if (msg.user_message) {
+                appendMessageToChat(msg.user_message, true);
+              }
+              if (msg.ai_message) {
+                appendMessageToChat(msg.ai_message, false);
+              }
+            });
+          }
+
+          // Scroll to bottom
+          chatContainer.scrollTop = chatContainer.scrollHeight;
+
+          // Highlight any code blocks in loaded messages
+          hljs.highlightAll();
+        } catch (error) {
+          console.error("Error loading conversation:", error);
+        }
+      }
     </script>
   </body>
 </html>

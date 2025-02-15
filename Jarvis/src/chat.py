@@ -27,7 +27,7 @@ class ChatBotWorkflowBuilder:
         self.workflow = None
         self.storage = storage
 
-    def _memory_state_update(self, state: State) -> Dict[str, List[AIMessage]]:
+    async def _memory_state_update(self, state: State) -> Dict[str, List[AIMessage]]:
         """Update the memory state"""
         logger.info("Starting memory state update")
         logger.debug(f"Initial state: {state}")
@@ -42,7 +42,7 @@ class ChatBotWorkflowBuilder:
         # Fetch messages from storage
         existing_messages = []
         summary = ""
-        thread_history = self.storage.load_conversation(thread_id, limit=1)
+        thread_history = await self.storage.load_conversation(thread_id, limit=1)
         logger.info(f"Retrieved {len(thread_history)} messages from storage")
 
         if thread_history:
@@ -69,7 +69,7 @@ class ChatBotWorkflowBuilder:
         logger.debug(f"Final state after memory update: {new_state}")
         return new_state
 
-    def _call_model(self, state: State) -> Dict[str, List[AIMessage]]:
+    async def _call_model(self, state: State) -> Dict[str, List[AIMessage]]:
         """Call the model with the current state"""
         logger.info("Starting model call")
         logger.info(f"Current message count: {len(state['messages'])}")
@@ -95,13 +95,13 @@ class ChatBotWorkflowBuilder:
         logger.debug(f"Prepared question for model: {question}")
 
         # Generate response
-        response = self.model.generate_response(question)
+        response = await self.model.generate_response(question)
         logger.info("Model response generated")
         logger.debug(f"Model response: {response}")
         
         return {"messages": [response]}
 
-    def _should_continue(self, state: State):
+    async def _should_continue(self, state: State):
         """Return the next node to execute."""
         message_count = len(state["messages"])
         decision = "summarize_conversation" if message_count > 2 else END
@@ -112,7 +112,7 @@ class ChatBotWorkflowBuilder:
 
         return decision
 
-    def _summarize_conversation(self, state: State) -> Dict[str, Any]:
+    async def _summarize_conversation(self, state: State) -> Dict[str, Any]:
         """Summarize the conversation state"""
         logger.info("Starting conversation summarization")
         logger.info(f"Current message count: {len(state['messages'])}")
@@ -130,7 +130,7 @@ class ChatBotWorkflowBuilder:
             summary_message = "Create a summary of the conversation above:"
 
         messages = state["messages"] + [HumanMessage(content=summary_message)]
-        response = self.model.generate_response(messages)
+        response = await self.model.generate_response(messages)
         
         delete_messages = [RemoveMessage(id=m.id) for m in state["messages"][:-2]]
         
@@ -141,7 +141,7 @@ class ChatBotWorkflowBuilder:
         
         return final_state
 
-    def build(self) -> StateGraph:
+    async def build(self) -> StateGraph:
         """Create and return the workflow graph"""
         workflow = StateGraph(State)
         
@@ -169,18 +169,18 @@ class BotBuilder:
         self.workflow = None
         self.temperature = None
 
-    def with_model(self, provider: str, model_name: str):
-        self.model = LanguageModelFactory.create_model(
+    async def with_model(self, provider: str, model_name: str):
+        self.model = await LanguageModelFactory.create_model(
             provider=provider,
             model_name=model_name
         )
         return self
 
-    def with_storage(self, storage_type: ChatStorageType):
+    async def with_storage(self, storage_type: ChatStorageType):
         self.storage = StorageManager(storage_type=storage_type)
         return self
 
-    def with_workflow(self, workflow_type: WorkflowType):
+    async def with_workflow(self, workflow_type: WorkflowType):
         """Set up the workflow based on the provided type"""
         if not self.model:
             raise ValueError("Model must be initialized before creating workflow")
@@ -194,10 +194,10 @@ class BotBuilder:
             case _:
                 raise ValueError(f"Unsupported workflow type: {workflow_type}")
         
-        self.workflow = workflow_builder.build()
+        self.workflow = await workflow_builder.build()
         return self
 
-    def with_temperature(self, temperature: float):
+    async def with_temperature(self, temperature: float):
         self.temperature = temperature
         return self
 
@@ -220,7 +220,7 @@ class BotBuilder:
         if missing_components:
             raise ValueError(f"Missing required components: {', '.join(missing_components)}")
 
-    def build(self) -> 'Bot':
+    async def build(self) -> 'Bot':
         """validate all components and build the bot"""
         self._validate_components()
 
@@ -239,7 +239,7 @@ class Bot:
         self.workflow = workflow
         self.temperature = temperature
 
-    def chat(self, message: str, thread_id: str) -> str:
+    async def chat(self, message: str, thread_id: str) -> str:
         """Process a single chat message and return the response"""
         try:
             logger.info("Starting new chat interaction")
@@ -251,7 +251,7 @@ class Bot:
             
             start_time = time.time()
 
-            response = self.workflow.invoke(
+            response = await self.workflow.ainvoke(
                 {"messages": [input_message], "thread_id": thread_id},
                 config=config
             )
@@ -283,7 +283,7 @@ class Bot:
             )
             
             # Save to storage
-            storage_success = self.storage.save_message(thread_id, message_data)
+            storage_success = await self.storage.save_message(thread_id, message_data)
             if not storage_success:
                 logger.error(f"Failed to save message to storage for thread {thread_id}, storage_success: {storage_success}")
         
