@@ -2,8 +2,8 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, Remo
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, END, MessagesState, StateGraph
 from typing import Dict, Any, List
-from src.llm_manager import LanguageModelFactory
-from core_web.django_storage import StorageManager
+from src.llm.llm_manager import LanguageModelFactory
+from src.storage.chat_storage import StorageManager
 from src.configs import ChatStorageType, WorkflowType
 from core_web.models import MessagePair, AIChatMessageStatus
 import time

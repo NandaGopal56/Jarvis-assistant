@@ -1,4 +1,4 @@
-from src.llm_manager import LanguageModelFactory
+from src.llm.llm_manager import LanguageModelFactory
 from src.configs import ModelProvider, GroqModelName
 from langchain_core.messages import HumanMessage
 

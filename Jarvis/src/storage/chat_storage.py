@@ -1,12 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
 from asgiref.sync import sync_to_async
-from core_web.models import Conversation, MessagePair
 from typing import List, Dict
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from src.configs import ChatStorageType
+from core_web.models import Conversation, MessagePair
 
 
 @dataclass

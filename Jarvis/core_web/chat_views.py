@@ -9,9 +9,9 @@ from asgiref.sync import sync_to_async
 from django.conf import settings
 from core_web.models import Conversation
 from core_web.services.chat_service import ChatService
-from src.llm_manager import GroqModelName
+from src.llm.llm_manager import GroqModelName
 from src.configs import ModelProvider
-from src.utils import generate_chat_title
+from src.llm.utils import generate_chat_title
 from core_web.services.chat_service import get_chatbot_instance
 import traceback
 

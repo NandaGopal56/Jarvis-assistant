@@ -1,9 +1,11 @@
+import logging
+import traceback
+from django.db import transaction
+from asgiref.sync import sync_to_async
 from core_web.models import Conversation
 from src.chat import BotBuilder
 from src.configs import WorkflowType, ModelProvider, BaseModelName
-from core_web.django_storage import ChatStorageType
-import logging
-import traceback
+from src.storage.chat_storage import ChatStorageType
 
 
 logger = logging.getLogger(__name__)
@@ -47,10 +49,6 @@ async def get_chatbot_instance(model_provider: ModelProvider, model_name: BaseMo
         logger.error(f"Failed to create chatbot instance: {traceback.format_exc()}")
         raise CreateChatbotError("Failed to create chatbot instance")
 
-
-
-from django.db import transaction
-from asgiref.sync import sync_to_async
 
 class ChatService:
     @staticmethod
