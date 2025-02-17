@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from .forms import UserProfileForm
 
 
-# Registration View
+
 def register(request):
     """
     Handles user registration for template views.
@@ -32,8 +32,10 @@ def register(request):
     return render(request, 'register.html')
 
 
-# Email Verification View
 def verify_email(request, uidb64, token):
+    """
+    Handles email verification for template views.
+    """
     user = UserRegistrationService.verify_email(uidb64, token)
     if user:
         messages.success(request, "Your email has been successfully verified. You can now log in.")
@@ -43,9 +45,10 @@ def verify_email(request, uidb64, token):
         return render(request, 'verification_failed.html')
 
 
-# Login View
 def login_view(request):
-    # Redirect to home if the user is already logged in
+    """
+    Handles user login for template views.
+    """
     if request.user.is_authenticated:
         return redirect('home')
 
@@ -61,6 +64,9 @@ def login_view(request):
 
 @login_required
 def profile_view(request):
+    """
+    Handles user profile view for template views.
+    """
     user = request.user
 
     if request.method == 'POST':
@@ -77,7 +83,6 @@ def profile_view(request):
     return render(request, 'profile.html', {'form': form})
 
 
-# Logout View
 def logout_view(request):
     """
     This view logs out the user and redirects them to the homepage.

@@ -6,8 +6,8 @@ from typing import Optional
 from enum import Enum
 
 
-# Enums for Role and Gender
 class RoleChoices(Enum):
+    '''Enums for Role'''
     SUPERADMIN = 'superadmin'
     STAFF = 'staff'
     USER = 'user'
@@ -16,8 +16,10 @@ class RoleChoices(Enum):
     def choices(cls):
         return [(tag.value, tag.name.capitalize()) for tag in cls]
 
+
 class GenderChoices(Enum):
-    MALE = 'male'
+    '''Enums for Gender'''
+    MALE = 'male'   
     FEMALE = 'female'
     OTHER = 'others'
 
@@ -25,8 +27,9 @@ class GenderChoices(Enum):
     def choices(cls):
         return [(tag.value, tag.name.capitalize()) for tag in cls]
 
-# Custom User Manager
+
 class UserManager(BaseUserManager):
+    '''Custom User Manager'''
     def create_user(self, email: str, password: Optional[str] = None, role: str = RoleChoices.USER.value, **extra_fields):
         if not email:
             raise ValueError('The Email field must be set')
@@ -44,8 +47,9 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_active', True)
         return self.create_user(email, password, role=RoleChoices.SUPERADMIN.value, **extra_fields)
 
-# Custom User Model
+
 class User(AbstractBaseUser, PermissionsMixin):
+    '''Custom User Model'''
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=50, blank=True, null=True)
     last_name = models.CharField(max_length=50, blank=True, null=True)
@@ -58,7 +62,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_login = models.DateTimeField(blank=True, null=True)  # Uses Django's default functionality
     role = models.CharField(max_length=20, choices=RoleChoices.choices(), default=RoleChoices.USER.value)
 
-    
+    # Custom User Manager
     objects = UserManager()
 
     USERNAME_FIELD = 'email'
