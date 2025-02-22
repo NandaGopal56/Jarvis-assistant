@@ -13,7 +13,7 @@ class AIChatMessageStatus(Enum):
 
 class Conversation(models.Model):
     conversation_id = models.BigAutoField(editable=False, primary_key=True)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.CASCADE, related_name='conversations')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='conversations')
     title = models.CharField(max_length=255, blank=True)
 
     # metadata

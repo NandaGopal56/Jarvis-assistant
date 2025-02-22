@@ -1,128 +1,135 @@
-import chromadb
+import asyncio
+import os
 from abc import ABC, abstractmethod
-from typing import Any, List, Dict
-from chromadb import PersistentClient, Collection
-from chromadb.config import Settings
-from chromadb.api.types import Metadata
+from dataclasses import dataclass
+from typing import List, Optional, Any, Dict
+from contextlib import asynccontextmanager
+from pinecone import Pinecone
+from dotenv import load_dotenv
 
-class VectorDatabase(ABC):
-    """
-    Abstract base class for a Vector Database.
-    
-    Implements the **Strategy Pattern**, allowing different vector databases to be used interchangeably.
-    """
+load_dotenv()
 
+
+@dataclass
+class VectorDBConfig:
+    config_dict: Dict[str, Any]
+
+@dataclass
+class VectorData:
+    id: str
+    values: List[float]
+    metadata: Dict[str, Any]
+
+
+
+class AsyncVectorDBStrategy(ABC):
     @abstractmethod
-    def add(self, ids: List[str], embeddings: List[List[float]], metadata: List[Metadata]) -> None:
-        """
-        Add vector embeddings to the database.
-        """
+    async def initialize(self) -> None:
         pass
 
     @abstractmethod
-    def query(self, parameters: Dict[str, Any]) -> Any:
-        """
-        Query vectors in the database.
-        """
+    async def cleanup(self) -> None:
         pass
 
     @abstractmethod
-    def delete(self, ids: List[str]) -> None:
-        """
-        Delete vectors from the database.
-        """
+    async def create_namespace(self, namespace: str, *args, **kwargs) -> bool:
+        pass
+
+    @abstractmethod
+    async def delete_namespace(self, namespace: str, *args, **kwargs) -> bool:
+        pass
+
+    @abstractmethod
+    async def upsert_vectors(self, namespace: str, vectors: List[VectorData]) -> bool:
+        pass
+
+    @abstractmethod
+    async def query_vectors(self, namespace: str, query_vector: List[float], top_k: int = 5) -> List[VectorData]:
+        pass
+
+    @abstractmethod
+    async def delete_vectors(self, namespace: str, vector_ids: List[str]) -> bool:
         pass
 
 
-class ChromaVectorDatabase(VectorDatabase):
-    """
-    Concrete implementation of the VectorDatabase interface using ChromaDB.
-    
-    Uses the **Strategy Pattern** to provide a specific implementation of vector database operations.
-    """
+class AsyncPineconeStrategy(AsyncVectorDBStrategy):
+    '''Pinecone Strategy Implementation'''
+    def __init__(self, config: VectorDBConfig):
+        self.config = config
+        self.pc: Optional[Pinecone] = None
 
-    def __init__(self, storage_path: str):
-        """
-        Initialize ChromaDB with persistent storage.
-        """
-        self.storage_path = storage_path
-        self.client = self._initialize_client()
-        self.collection = self._initialize_collection("vectors")
+    async def initialize(self) -> None:
+        '''Initialize the Pinecone client with the API key'''
+        self.pc = Pinecone(api_key=self.config.config_dict['api_key'])
 
-    def add(self, ids: List[str], embeddings: List[List[float]], metadata: List[Metadata]) -> None:
-        self.collection.add(ids=ids, embeddings=embeddings, metadatas=metadata)
+    async def cleanup(self) -> None:
+        '''No explicit cleanup is required for Pinecone'''
+        pass
 
-    def query(self, parameters: Dict[str, Any]) -> Any:
-        return self.collection.query(**parameters)
+    async def create_namespace(self, namespace: str, *args, **kwargs) -> bool:
+        '''Pinecone automatically creates namespaces during upsert'''
+        return True
 
-    def delete(self, ids: List[str]) -> None:
-        self.collection.delete(ids=ids)
+    async def delete_namespace(self, namespace: str, *args, **kwargs) -> bool:
+        try:
+            async with self.pc.IndexAsyncio(host=self.config.config_dict['host']) as idx:
+                # Delete all records within the namespace
+                await idx.delete(delete_all=True, namespace=namespace)
+            return True
+        except Exception as e:
+            print(f"Error deleting namespace: {e}")
+            return False
 
-    def _initialize_collection(self, collection_name: str) -> Collection:
-        return self.client.get_or_create_collection(name=collection_name)
+    async def upsert_vectors(self, namespace: str, vectors: List[VectorData]) -> bool:
+        try:
+            records = []
+            for v in vectors:
+                # Create a record merging vector and metadata.
+                record = {"id": v.id, "values": v.values, "metadata": v.metadata}
+                records.append(record)
+            async with self.pc.IndexAsyncio(host=self.config.config_dict['host']) as idx:
+                await idx.upsert(namespace=namespace, vectors=records)
+            return True
+        except Exception as e:
+            print(f"Error upserting vectors: {e}")
+            return False
 
-    def _initialize_client(self) -> PersistentClient:
-        """
-        Private method to create and initialize the ChromaDB client.
-        """
-        return chromadb.PersistentClient(path=self.storage_path)
+    async def query_vectors(self, namespace: str, query_vector: List[float], top_k: int = 5) -> List[VectorData]:
+        try:
+            async with self.pc.IndexAsyncio(host=self.config.config_dict['host']) as idx:
+                # Assume query_records returns a dict with a "matches" key.
+                response = await idx.query(namespace=namespace, 
+                                           vector=query_vector, 
+                                           top_k=top_k, 
+                                           include_values=True, 
+                                           include_metadata=True
+                                        )
+                matches = response.get("matches", [])
+                results = [
+                    VectorData(match["id"], match["values"], match.get("metadata", {}))
+                    for match in matches
+                ]
+            return results
+        except Exception as e:
+            print(f"Error querying vectors: {e}")
+            return []
+
+    async def delete_vectors(self, namespace: str, ids: List[str]) -> bool:
+        try:
+            async with self.pc.IndexAsyncio(host=self.config.config_dict['host']) as idx:
+                await idx.delete(ids=ids, namespace=namespace)
+            return True
+        except Exception as e:
+            print(f"Error deleting vectors: {e}")
+            return False
 
 
-class VectorDatabaseService:
-    """
-    Facade class that provides a simplified interface to interact with a Vector Database.
-    
-    Implements the **Facade Pattern**, hiding complex database operations behind a unified interface.
-    """
-
-    def __init__(self, database: VectorDatabase):
-        """
-        Initialize the facade with a VectorDatabase instance.
-        """
-        self.database = database
-
-    def add_vectors(self, ids: List[str], embeddings: List[List[float]], metadata: List[Metadata]) -> None:
-        """
-        Adds vector embeddings to the database.
-        """
-        self.database.add(ids, embeddings, metadata)
-
-    def query_vectors(self, parameters: Dict[str, Any]) -> Any:
-        """
-        Queries vector embeddings from the database.
-        """
-        return self.database.query(parameters)
-
-    def delete_vectors(self, ids: List[str]) -> None:
-        """
-        Deletes vector embeddings from the database by IDs.
-        """
-        self.database.delete(ids)
-
-
-# Example Usage
-if __name__ == "__main__":
-    # Create ChromaDB instance
-    chroma_db = ChromaVectorDatabase("./chromadb_storage")
-
-    # Inject into the facade
-    vector_service = VectorDatabaseService(database=chroma_db)
-
-    # Example data
-    ids = ["vec1", "vec2"]
-    embeddings = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
-    metadata = [{"name": "vector1"}, {"name": "vector2"}]
-
-    # Add vectors
-    vector_service.add_vectors(ids, embeddings, metadata)
-
-    # Query vectors
-    query_parameters = {
-        "query_embeddings": [[0.1, 0.2, 0.3]],
-        "n_results": 1,
-    }
-    result = vector_service.query_vectors(query_parameters)
-    print("Query Result:", result)
-
-    # Delete vectors
-    vector_service.delete_vectors(["vec1", "vec2"])
+class AsyncVectorDBFactory:
+    '''Factory for Creating Database Strategies'''
+    @staticmethod
+    def create_strategy(config: VectorDBConfig) -> AsyncVectorDBStrategy:
+        db_type = config.config_dict.get('db_type')
+        if db_type == 'pinecone':
+            return AsyncPineconeStrategy(config)
+        else:
+            raise ValueError(f"Unsupported database type: {db_type}")
