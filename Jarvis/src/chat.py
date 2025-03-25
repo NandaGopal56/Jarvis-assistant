@@ -4,7 +4,7 @@ from langgraph.graph import START, END, MessagesState, StateGraph
 from typing import Dict, Any, List
 from src.llm.llm_manager import LanguageModelFactory
 from src.storage.chat_storage import StorageManager
-from src.configs import ChatStorageType, WorkflowType
+from src.globals.configs import ChatStorageType, WorkflowType
 from core_web.models import MessagePair, AIChatMessageStatus
 import time
 import traceback

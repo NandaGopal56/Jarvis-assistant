@@ -65,3 +65,15 @@ class MessagePair(models.Model):
 
     def __str__(self):
         return f"Message Pair {self.message_pair_id} in conversation {self.conversation_id}"
+
+
+class Document(models.Model):
+    '''document class to store the user uploaded doc with vector db references'''
+    file = models.FileField(upload_to='documents/')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='doc_conversations')
+    title = models.CharField(max_length=255)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    vector_db_id = models.CharField(max_length=255, blank=True, null=True)
+    
+    def __str__(self):
+        return self.title

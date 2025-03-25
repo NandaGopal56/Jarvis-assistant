@@ -4,7 +4,7 @@ from django.db import transaction
 from asgiref.sync import sync_to_async
 from core_web.models import Conversation
 from src.chat import BotBuilder
-from src.configs import WorkflowType, ModelProvider, BaseModelName
+from src.globals.configs import WorkflowType, ModelProvider, BaseModelName
 from src.storage.chat_storage import ChatStorageType
 
 

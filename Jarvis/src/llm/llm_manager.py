@@ -3,7 +3,7 @@ from typing import List, Tuple
 from enum import Enum
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
-from src.configs import BaseModelName, GroqModelName, OpenAIModelName, ModelProvider
+from src.globals.configs import BaseModelName, GroqModelName, OpenAIModelName, ModelProvider
 
 # Load environment variables from .env file
 load_dotenv()

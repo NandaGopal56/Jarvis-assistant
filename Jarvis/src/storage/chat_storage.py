@@ -5,7 +5,7 @@ from typing import List, Dict
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-from src.configs import ChatStorageType
+from src.globals.configs import ChatStorageType
 from core_web.models import Conversation, MessagePair
 
 
