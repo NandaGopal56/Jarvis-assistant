@@ -26,6 +26,7 @@ class GroqModelName(BaseModelName):
     LLAMA_3_2_1B = "llama-3.2-1b-preview"
     LLAMA_3_3_70B = "llama-3.3-70b-versatile"
     MIXTRAL_8X7B = "mixtral-8x7b-32768"
+    LLAMA_3_2_90b_VISION_PREVIEW = "llama-3.2-90b-vision-preview"
 
 class OpenAIModelName(BaseModelName):
     """Supported OpenAI model names."""
@@ -33,6 +34,7 @@ class OpenAIModelName(BaseModelName):
     GPT_3_5_TURBO = "gpt-3.5-turbo"
     GPT_4 = "gpt-4"
     GPT_4_TURBO = "gpt-4-turbo-preview"
+    
 
 
 
